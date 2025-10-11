@@ -2,7 +2,7 @@ name: Auto Process Add Favorite Issue
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [labeled]
 
 permissions:
   contents: write
@@ -11,10 +11,8 @@ permissions:
 
 jobs:
   process-new-collection:
-    # Process issues with "add-favorite" label OR title starting with "Add Favorite:"
-    if: |
-      (github.event.action == 'labeled' && github.event.label.name == 'add-favorite') ||
-      (github.event.action == 'opened' && startsWith(github.event.issue.title, 'Add Favorite:'))
+    # Process issues when "add-favorite" label is added
+    if: github.event.label.name == 'add-favorite'
     runs-on: ubuntu-latest
     
     steps:
@@ -87,6 +85,18 @@ jobs:
               throw new Error('无法解析 data.js 文件');
             }
             
+            // 检查是否已存在相同标题的收藏 (防止重复添加)
+            const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const duplicateCheck = new RegExp(`title:\\s*"${escapedTitle}"`, 'i');
+            if (duplicateCheck.test(dataContent)) {
+              console.log('Duplicate entry detected, skipping...');
+              core.setOutput('title', title);
+              core.setOutput('newId', 'skipped');
+              core.setOutput('issueNumber', issueNumber);
+              core.setOutput('skipped', 'true');
+              return;
+            }
+            
             // 找到最大 ID
             const idMatches = dataContent.matchAll(/id:\s*(\d+)/g);
             let maxId = 0;
@@ -130,6 +140,7 @@ jobs:
             core.setOutput('issueNumber', issueNumber);
       
       - name: Commit and push changes
+        if: steps.parse.outputs.skipped != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -167,12 +178,20 @@ jobs:
             const issueNumber = context.payload.issue.number;
             const title = '${{ steps.parse.outputs.title }}';
             const newId = '${{ steps.parse.outputs.newId }}';
+            const skipped = '${{ steps.parse.outputs.skipped }}';
+            
+            let body;
+            if (skipped === 'true') {
+              body = `ℹ️ This favorite already exists in the collection.\n\n**Details:**\n- **Title**: ${title}\n\nNo changes were made. If this is a mistake, please check for existing entries with the same title.`;
+            } else {
+              body = `✅ Your favorite has been automatically added!\n\n**Details:**\n- **Title**: ${title}\n- **ID**: ${newId}\n\nThe changes have been committed to the repository and will be deployed shortly.`;
+            }
             
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              body: `✅ Your favorite has been automatically added!\n\n**Details:**\n- **Title**: ${title}\n- **ID**: ${newId}\n\nThe changes have been committed to the repository and will be deployed shortly.`
+              body: body
             });
             
             await github.rest.issues.update({
