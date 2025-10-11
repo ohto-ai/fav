@@ -97,15 +97,15 @@ jobs:
             
             // 生成新的收藏对象代码
             const newItem = `    {
-        id: ${newId},
-        title: "${title.replace(/"/g, '\\"')}",
-        icon: "${icon.replace(/"/g, '\\"')}",
-        description: "${description.replace(/"/g, '\\"')}",
-        tags: [${tags.map(t => `"${t.replace(/"/g, '\\"')}"`).join(', ')}],
-        content: \`
-${content}
-        \`
-    }`;
+                    id: ${newId},
+                    title: "${title.replace(/"/g, '\\"')}",
+                    icon: "${icon.replace(/"/g, '\\"')}",
+                    description: "${description.replace(/"/g, '\\"')}",
+                    tags: [${tags.map(t => `"${t.replace(/"/g, '\\"')}"`).join(', ')}],
+                    content: \`
+            ${content}
+                    \`
+                }`;
             
             // 在数组末尾添加新项
             const lastItemIndex = dataContent.lastIndexOf('}');
