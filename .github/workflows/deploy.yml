@@ -9,6 +9,14 @@ on:
   # Removed pull_request trigger to prevent double execution and conflicts
   # PRs should not create permanent deployments to gh-pages
 
+  # Trigger deployment after process-collection-issue workflow completes
+  workflow_run:
+    workflows: ["Auto Process Add Favorite Issue"]
+    types:
+      - completed
+    branches:
+      - master
+
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
@@ -25,7 +33,10 @@ concurrency:
 jobs:
   deploy:
     # 如果是 gh-pages 分支的推送，直接跳过
-    if: github.ref != 'refs/heads/gh-pages'
+    # 如果是 workflow_run 触发，只在成功时运行
+    if: |
+      github.ref != 'refs/heads/gh-pages' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     
     steps:
