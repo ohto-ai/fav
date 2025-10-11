@@ -29,6 +29,23 @@
 
 ## 📝 如何添加收藏
 
+### 方法一：通过 GitHub Issue（推荐）
+
+1. 访问网站，点击 **"➕ 新增收藏"** 按钮
+2. 填写收藏信息并预览
+3. 点击提交，会自动跳转到 GitHub 创建 Issue
+4. 提交 Issue 后，GitHub Actions 会自动处理并创建 Pull Request
+5. 等待审核和合并
+
+**或者直接在 GitHub 上创建 Issue：**
+
+1. 前往 [Issues 页面](https://github.com/ohto-ai/fav/issues/new/choose)
+2. 选择 **"新增收藏"** 模板
+3. 填写所有必填字段
+4. 提交后自动处理
+
+### 方法二：直接编辑 data.js
+
 编辑 `data.js` 文件，在 `collectionsData` 数组中添加新的收藏对象：
 
 ```javascript
@@ -88,6 +105,28 @@ php -S localhost:8000
 3. 推送代码到 `main` 分支，自动触发部署
 4. 部署完成后，访问 `https://ohto-ai.github.io/fav/`
 
+## 🤖 自动化工作流
+
+### 新增收藏自动处理
+
+本项目配置了自动化工作流来处理新增收藏的 Issue：
+
+1. **触发条件**：当创建或编辑带有 `新增收藏` 标签的 Issue 时
+2. **处理流程**：
+   - 自动解析 Issue 内容（支持网站生成的 YAML 格式和 GitHub Issue 表单格式）
+   - 提取收藏信息（标题、图标、描述、标签、详细内容）
+   - 自动生成新的 ID
+   - 将新收藏添加到 `data.js` 文件
+   - 创建 Pull Request 供审核
+   - 在 Issue 中评论 PR 链接
+3. **审核合并**：审核 PR 内容后合并，新收藏即添加到网站
+
+### 工作流文件
+
+- `.github/workflows/deploy.yml` - 部署工作流
+- `.github/workflows/process-collection-issue.yml` - 新增收藏自动处理工作流
+- `.github/ISSUE_TEMPLATE/add-collection.yml` - 新增收藏 Issue 模板
+
 ## 📁 项目结构
 
 ```
@@ -97,8 +136,11 @@ php -S localhost:8000
 ├── app.js             # 应用逻辑
 ├── data.js            # 收藏数据
 ├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   │   └── add-collection.yml  # 新增收藏 Issue 模板
 │   └── workflows/
-│       └── deploy.yml # GitHub Actions 部署配置
+│       ├── deploy.yml                       # GitHub Pages 部署配置
+│       └── process-collection-issue.yml     # 新增收藏自动处理
 └── README.md          # 项目说明
 ```
 

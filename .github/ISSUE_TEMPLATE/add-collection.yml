@@ -1,3 +1,4 @@
+---
 name: 新增收藏
 description: 提交新的收藏项目到网站
 title: "新增收藏：[请填写标题]"
@@ -7,7 +8,7 @@ body:
     attributes:
       value: |
         感谢您贡献新的收藏！请按照以下格式填写信息。
-        
+
   - type: input
     id: title
     attributes:
@@ -16,7 +17,7 @@ body:
       placeholder: 例如：云游君的小料理
     validations:
       required: true
-      
+
   - type: input
     id: icon
     attributes:
@@ -25,7 +26,7 @@ body:
       placeholder: 例如：🍳 或 https://example.com/icon.png
     validations:
       required: true
-      
+
   - type: textarea
     id: description
     attributes:
@@ -34,7 +35,7 @@ body:
       placeholder: 例如：云游君的美食烹饪指南，分享各种料理配方和烹饪技巧
     validations:
       required: true
-      
+
   - type: input
     id: tags
     attributes:
@@ -43,7 +44,7 @@ body:
       placeholder: 例如：美食, 料理, 生活
     validations:
       required: true
-      
+
   - type: textarea
     id: content
     attributes:
@@ -51,11 +52,11 @@ body:
       description: 使用 Markdown 格式编写详细内容
       placeholder: |
         # 主标题
-        
+
         这里是详细介绍...
-        
+
         ## 特点
-        
+
         - 特点1
         - 特点2
       render: markdown
