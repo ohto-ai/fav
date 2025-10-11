@@ -459,31 +459,25 @@ ${content}
     \`
 }`;
     
-    // 生成 GitHub Issue 的内容
+    // 生成 GitHub Issue 的内容（使用结构化格式便于自动化处理）
     const issueTitle = `新增收藏：${title}`;
-    const issueBody = `## 新增收藏信息
+    const issueBody = `<!-- 此 Issue 由网站前端自动生成，请勿修改格式 -->
 
-**标题：** ${title}
-**图标：** ${icon}
-**描述：** ${description}
-**标签：** ${tagsArray.join(', ')}
+\`\`\`yaml
+title: ${title.replace(/"/g, '\\"')}
+icon: ${icon.replace(/"/g, '\\"')}
+description: ${description.replace(/"/g, '\\"')}
+tags: ${tagsArray.join(', ')}
+\`\`\`
 
 ## 详细内容
 
-\`\`\`
+\`\`\`markdown
 ${content}
 \`\`\`
 
-## 代码
-
-请将以下代码添加到 \`data.js\` 文件的 \`collectionsData\` 数组中：
-
-\`\`\`javascript
-${newItemCode}
-\`\`\`
-
 ---
-*此 Issue 由网站前端自动生成*`;
+*此 Issue 将被自动处理并添加到收藏列表中*`;
     
     // 获取当前仓库信息
     const repoOwner = 'ohto-ai';  // 可以从 location.hostname 或配置中获取

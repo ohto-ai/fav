@@ -1,0 +1,186 @@
+name: 自动处理新增收藏 Issue
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  process-new-collection:
+    # 只处理带有"新增收藏"标签的 Issue
+    if: contains(github.event.issue.labels.*.name, '新增收藏')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Parse issue and add to data.js
+        id: parse
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueBody = context.payload.issue.body;
+            const issueNumber = context.payload.issue.number;
+            
+            console.log('Issue body:', issueBody);
+            
+            // 解析 Issue 内容
+            let title, icon, description, tags, content;
+            
+            // 方法1: 尝试解析 YAML 格式（从网站前端生成的）
+            const yamlMatch = issueBody.match(/```yaml\s*\ntitle:\s*(.+?)\nicon:\s*(.+?)\ndescription:\s*(.+?)\ntags:\s*(.+?)\n```/s);
+            
+            if (yamlMatch) {
+              // 从 YAML 格式解析
+              title = yamlMatch[1].trim();
+              icon = yamlMatch[2].trim();
+              description = yamlMatch[3].trim();
+              tags = yamlMatch[4].trim().split(',').map(t => t.trim());
+              
+              // 提取 Markdown 内容
+              const contentMatch = issueBody.match(/## 详细内容\s*\n\s*```markdown\s*\n([\s\S]+?)```/);
+              content = contentMatch ? contentMatch[1].trim() : '';
+            } else {
+              // 方法2: 尝试解析 GitHub Issue 表单格式
+              const formData = {};
+              
+              // 解析表单提交的格式
+              const titleMatch = issueBody.match(/### 标题\s*\n\s*(.+?)(?=\n###|\n\n|$)/s);
+              const iconMatch = issueBody.match(/### 图标\s*\n\s*(.+?)(?=\n###|\n\n|$)/s);
+              const descMatch = issueBody.match(/### 描述\s*\n\s*(.+?)(?=\n###|\n\n|$)/s);
+              const tagsMatch = issueBody.match(/### 标签\s*\n\s*(.+?)(?=\n###|\n\n|$)/s);
+              const contentMatch = issueBody.match(/### 详细内容\s*\n\s*([\s\S]+?)(?=\n###|$)/s);
+              
+              if (!titleMatch || !iconMatch || !descMatch || !tagsMatch || !contentMatch) {
+                throw new Error('无法解析 Issue 格式，请确保使用正确的模板');
+              }
+              
+              title = titleMatch[1].trim();
+              icon = iconMatch[1].trim();
+              description = descMatch[1].trim();
+              tags = tagsMatch[1].trim().split(',').map(t => t.trim());
+              content = contentMatch[1].trim();
+            }
+            
+            console.log('Parsed data:', { title, icon, description, tags, content: content.substring(0, 100) });
+            
+            // 读取 data.js 文件
+            const fs = require('fs');
+            const dataContent = fs.readFileSync('data.js', 'utf8');
+            
+            // 提取现有数据并找到最大 ID
+            const dataMatch = dataContent.match(/const collectionsData = \[([\s\S]*)\];/);
+            if (!dataMatch) {
+              throw new Error('无法解析 data.js 文件');
+            }
+            
+            // 找到最大 ID
+            const idMatches = dataContent.matchAll(/id:\s*(\d+)/g);
+            let maxId = 0;
+            for (const match of idMatches) {
+              maxId = Math.max(maxId, parseInt(match[1]));
+            }
+            const newId = maxId + 1;
+            
+            console.log('New ID:', newId);
+            
+            // 转义特殊字符
+            const escapeStr = (str) => str.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+            
+            // 生成新的收藏对象代码
+            const newItem = `    {
+        id: ${newId},
+        title: "${title.replace(/"/g, '\\"')}",
+        icon: "${icon.replace(/"/g, '\\"')}",
+        description: "${description.replace(/"/g, '\\"')}",
+        tags: [${tags.map(t => `"${t.replace(/"/g, '\\"')}"`).join(', ')}],
+        content: \`
+${content}
+        \`
+    }`;
+            
+            // 在数组末尾添加新项
+            const lastItemIndex = dataContent.lastIndexOf('}');
+            const beforeLastItem = dataContent.substring(0, lastItemIndex + 1);
+            const afterLastItem = dataContent.substring(lastItemIndex + 1);
+            
+            const newDataContent = beforeLastItem + ',\n' + newItem + afterLastItem;
+            
+            // 写入文件
+            fs.writeFileSync('data.js', newDataContent, 'utf8');
+            
+            console.log('Successfully added new collection to data.js');
+            
+            // 返回信息用于后续步骤
+            return {
+              title,
+              newId,
+              issueNumber
+            };
+      
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "新增收藏：${{ fromJSON(steps.parse.outputs.result).title }} (#${{ github.event.issue.number }})"
+          branch: auto-add-collection-${{ github.event.issue.number }}
+          delete-branch: true
+          title: "新增收藏：${{ fromJSON(steps.parse.outputs.result).title }}"
+          body: |
+            此 PR 自动处理 Issue #${{ github.event.issue.number }} 中提交的新增收藏请求。
+            
+            ## 新增内容
+            
+            - **标题**: ${{ fromJSON(steps.parse.outputs.result).title }}
+            - **ID**: ${{ fromJSON(steps.parse.outputs.result).newId }}
+            
+            ## 检查清单
+            
+            - [ ] 验证内容格式正确
+            - [ ] 确认没有重复项
+            - [ ] 检查标签是否合适
+            
+            关闭 #${{ github.event.issue.number }}
+          labels: |
+            自动生成
+            新增收藏
+      
+      - name: Comment on issue
+        if: steps.cpr.outputs.pull-request-number
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = '${{ steps.cpr.outputs.pull-request-number }}';
+            const issueNumber = context.payload.issue.number;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `✅ 已自动创建 Pull Request #${prNumber} 来添加此收藏。\n\n请等待审核和合并。`
+            });
+      
+      - name: Comment on error
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueNumber = context.payload.issue.number;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `❌ 自动处理失败。请检查 Issue 格式是否正确，或手动添加到 data.js 文件中。\n\n查看错误详情: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+            });
