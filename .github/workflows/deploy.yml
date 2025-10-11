@@ -36,7 +36,7 @@ jobs:
 
       - name: Determine deployment path
         run: |
-          if [ "${{ github.ref_name }}" = "dev" ]; then
+          if [ "${{ github.ref_name }}" = "master" ]; then
             echo "DEPLOY_PATH=." >> $GITHUB_ENV
           else
             echo "DEPLOY_PATH=br/${{ github.ref_name }}" >> $GITHUB_ENV
