@@ -112,6 +112,25 @@ function bindEvents() {
     // 清除标签
     document.getElementById('tagClearBtn').addEventListener('click', clearTags);
     
+    // 新增按钮
+    document.getElementById('addItemBtn').addEventListener('click', openAddItemModal);
+    
+    // 关闭模态框
+    document.getElementById('modalCloseBtn').addEventListener('click', closeAddItemModal);
+    
+    // 预览按钮
+    document.getElementById('previewBtn').addEventListener('click', previewItem);
+    
+    // 表单提交
+    document.getElementById('addItemForm').addEventListener('submit', handleFormSubmit);
+    
+    // 点击模态框外部关闭
+    document.getElementById('addItemModal').addEventListener('click', (e) => {
+        if (e.target.id === 'addItemModal') {
+            closeAddItemModal();
+        }
+    });
+    
     // 点击外部关闭标签过滤器
     document.addEventListener('click', (e) => {
         const tagFilter = document.querySelector('.tag-filter');
@@ -334,4 +353,156 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
     init();
+}
+
+// 新增收藏相关函数
+
+// 打开新增模态框
+function openAddItemModal() {
+    document.getElementById('addItemModal').classList.add('active');
+    document.body.style.overflow = 'hidden'; // 防止背景滚动
+}
+
+// 关闭新增模态框
+function closeAddItemModal() {
+    document.getElementById('addItemModal').classList.remove('active');
+    document.body.style.overflow = 'auto';
+    // 清空表单
+    document.getElementById('addItemForm').reset();
+    document.getElementById('previewSection').style.display = 'none';
+}
+
+// 预览功能
+function previewItem() {
+    const title = document.getElementById('itemTitle').value.trim();
+    const icon = document.getElementById('itemIcon').value.trim();
+    const description = document.getElementById('itemDescription').value.trim();
+    const tags = document.getElementById('itemTags').value.trim();
+    const content = document.getElementById('itemContent').value.trim();
+    
+    if (!title || !icon || !description || !tags || !content) {
+        alert('请填写所有必填字段！');
+        return;
+    }
+    
+    const tagsArray = tags.split(',').map(t => t.trim()).filter(t => t);
+    
+    const previewCard = document.getElementById('previewCard');
+    const iconHtml = icon.startsWith('http') 
+        ? `<img src="${icon}" alt="${title}" style="width: 48px; height: 48px;">` 
+        : icon;
+    
+    const tagsHtml = tagsArray
+        .map(tag => `<span class="tag">${tag}</span>`)
+        .join('');
+    
+    const contentHtml = parseMarkdown(content);
+    
+    previewCard.innerHTML = `
+        <div class="card-header">
+            <div class="card-icon">${iconHtml}</div>
+            <div class="card-title-wrapper">
+                <h3 class="card-title">${title}</h3>
+            </div>
+        </div>
+        <p class="card-description">${description}</p>
+        <div class="card-tags">${tagsHtml}</div>
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <h4 style="margin-bottom: 0.5rem;">详细内容预览：</h4>
+            <div style="max-height: 300px; overflow-y: auto;">
+                ${contentHtml}
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('previewSection').style.display = 'block';
+    
+    // 滚动到预览区域
+    setTimeout(() => {
+        document.getElementById('previewSection').scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'nearest' 
+        });
+    }, 100);
+}
+
+// 处理表单提交
+function handleFormSubmit(e) {
+    e.preventDefault();
+    
+    const title = document.getElementById('itemTitle').value.trim();
+    const icon = document.getElementById('itemIcon').value.trim();
+    const description = document.getElementById('itemDescription').value.trim();
+    const tags = document.getElementById('itemTags').value.trim();
+    const content = document.getElementById('itemContent').value.trim();
+    
+    if (!title || !icon || !description || !tags || !content) {
+        alert('请填写所有必填字段！');
+        return;
+    }
+    
+    const tagsArray = tags.split(',').map(t => t.trim()).filter(t => t);
+    
+    // 获取当前最大的 ID
+    const maxId = Math.max(...collectionsData.map(item => item.id), 0);
+    const newId = maxId + 1;
+    
+    // 生成新的收藏对象代码
+    const newItemCode = `{
+    id: ${newId},
+    title: "${title.replace(/"/g, '\\"')}",
+    icon: "${icon.replace(/"/g, '\\"')}",
+    description: "${description.replace(/"/g, '\\"')}",
+    tags: [${tagsArray.map(t => `"${t.replace(/"/g, '\\"')}"`).join(', ')}],
+    content: \`
+${content}
+    \`
+}`;
+    
+    // 生成 GitHub Issue 的内容
+    const issueTitle = `新增收藏：${title}`;
+    const issueBody = `## 新增收藏信息
+
+**标题：** ${title}
+**图标：** ${icon}
+**描述：** ${description}
+**标签：** ${tagsArray.join(', ')}
+
+## 详细内容
+
+\`\`\`
+${content}
+\`\`\`
+
+## 代码
+
+请将以下代码添加到 \`data.js\` 文件的 \`collectionsData\` 数组中：
+
+\`\`\`javascript
+${newItemCode}
+\`\`\`
+
+---
+*此 Issue 由网站前端自动生成*`;
+    
+    // 获取当前仓库信息
+    const repoOwner = 'ohto-ai';  // 可以从 location.hostname 或配置中获取
+    const repoName = 'fav';
+    
+    // 构建 GitHub Issue 创建 URL
+    const githubUrl = `https://github.com/${repoOwner}/${repoName}/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}`;
+    
+    // 确认后跳转
+    const confirmMessage = `即将跳转到 GitHub 创建 Issue，请确认信息：
+
+标题：${title}
+描述：${description}
+标签：${tagsArray.join(', ')}
+
+点击确定将打开 GitHub 页面`;
+    
+    if (confirm(confirmMessage)) {
+        window.open(githubUrl, '_blank');
+        closeAddItemModal();
+    }
 }
