@@ -2,7 +2,7 @@ name: Auto Process Add Favorite Issue
 
 on:
   issues:
-    types: [labeled]
+    types: [opened, labeled]
 
 permissions:
   contents: write
@@ -11,8 +11,10 @@ permissions:
 
 jobs:
   process-new-collection:
-    # Only process issues with "add-favorite" label
-    if: github.event.label.name == 'add-favorite'
+    # Process issues with "add-favorite" label OR title starting with "Add Favorite:"
+    if: |
+      (github.event.action == 'labeled' && github.event.label.name == 'add-favorite') ||
+      (github.event.action == 'opened' && startsWith(github.event.issue.title, 'Add Favorite:'))
     runs-on: ubuntu-latest
     
     steps:
@@ -123,54 +125,39 @@ jobs:
             console.log('Successfully added new collection to data.js');
             
             // 返回信息用于后续步骤
-            return {
-              title,
-              newId,
-              issueNumber
-            };
+            core.setOutput('title', title);
+            core.setOutput('newId', newId);
+            core.setOutput('issueNumber', issueNumber);
       
-      - name: Create Pull Request
-        id: cpr
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "Add Favorite: ${{ fromJSON(steps.parse.outputs.result).title }} (#${{ github.event.issue.number }})"
-          branch: auto-add-collection-${{ github.event.issue.number }}
-          delete-branch: true
-          title: "Add Favorite: ${{ fromJSON(steps.parse.outputs.result).title }}"
-          body: |
-            This PR automatically processes the add favorite request submitted in Issue #${{ github.event.issue.number }}.
-            
-            ## New Content
-            
-            - **Title**: ${{ fromJSON(steps.parse.outputs.result).title }}
-            - **ID**: ${{ fromJSON(steps.parse.outputs.result).newId }}
-            
-            ## Checklist
-            
-            - [ ] Verify content format is correct
-            - [ ] Confirm no duplicates
-            - [ ] Check if tags are appropriate
-            
-            Closes #${{ github.event.issue.number }}
-          labels: |
-            auto-generated
-            add-favorite
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.js
+          git commit -m "Add Favorite: ${{ steps.parse.outputs.title }} (#${{ github.event.issue.number }})"
+          git push
       
-      - name: Comment on issue
-        if: steps.cpr.outputs.pull-request-number
+      - name: Close issue and comment
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const prNumber = '${{ steps.cpr.outputs.pull-request-number }}';
             const issueNumber = context.payload.issue.number;
+            const title = '${{ steps.parse.outputs.title }}';
+            const newId = '${{ steps.parse.outputs.newId }}';
             
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              body: `✅ Pull Request #${prNumber} has been automatically created to add this favorite.\n\nPlease wait for review and merge.`
+              body: `✅ Your favorite has been automatically added!\n\n**Details:**\n- **Title**: ${title}\n- **ID**: ${newId}\n\nThe changes have been committed to the repository and will be deployed shortly.`
+            });
+            
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              state: 'closed'
             });
       
       - name: Comment on error

@@ -483,8 +483,8 @@ ${content}
     const repoOwner = 'ohto-ai';  // 可以从 location.hostname 或配置中获取
     const repoName = 'fav';
     
-    // 构建 GitHub Issue 创建 URL
-    const githubUrl = `https://github.com/${repoOwner}/${repoName}/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}`;
+    // 构建 GitHub Issue 创建 URL (包含 add-favorite 标签)
+    const githubUrl = `https://github.com/${repoOwner}/${repoName}/issues/new?labels=add-favorite&title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}`;
     
     // 确认后跳转
     const confirmMessage = `即将跳转到 GitHub 创建 Issue，请确认信息：
