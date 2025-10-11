@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>收藏集</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">📚 我的收藏</h1>
+            <button class="theme-toggle" id="themeToggle" aria-label="切换主题">
+                <span class="icon-light">☀️</span>
+                <span class="icon-dark">🌙</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="controls">
+            <div class="search-box">
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    placeholder="搜索收藏..." 
+                    class="search-input"
+                >
+            </div>
+            
+            <div class="tag-filter">
+                <button class="tag-filter-toggle" id="tagFilterToggle">
+                    🏷️ 标签筛选
+                    <span class="tag-count"></span>
+                </button>
+                <div class="tag-filter-dropdown" id="tagFilterDropdown">
+                    <div class="tag-filter-header">
+                        <span>选择标签</span>
+                        <button class="tag-clear" id="tagClearBtn">清除</button>
+                    </div>
+                    <div class="tag-list" id="tagList"></div>
+                </div>
+            </div>
+            
+            <button class="btn-add-item" id="addItemBtn">
+                ➕ 新增收藏
+            </button>
+        </div>
+
+        <div class="collections-grid" id="collectionsGrid"></div>
+        
+        <div class="no-results" id="noResults" style="display: none;">
+            <p>😕 未找到匹配的收藏</p>
+        </div>
+    </main>
+
+    <!-- Add Item Modal -->
+    <div class="modal" id="addItemModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>新增收藏</h2>
+                <button class="modal-close" id="modalCloseBtn">✕</button>
+            </div>
+            <form class="add-item-form" id="addItemForm">
+                <div class="form-group">
+                    <label for="itemTitle">标题 *</label>
+                    <input type="text" id="itemTitle" required placeholder="请输入收藏标题">
+                </div>
+                
+                <div class="form-group">
+                    <label for="itemIcon">图标 *</label>
+                    <input type="text" id="itemIcon" required placeholder="输入 emoji 或图片 URL，如：🎯">
+                </div>
+                
+                <div class="form-group">
+                    <label for="itemDescription">描述 *</label>
+                    <textarea id="itemDescription" required placeholder="请输入简短描述" rows="2"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="itemTags">标签 *</label>
+                    <input type="text" id="itemTags" required placeholder="多个标签用逗号分隔，如：工具, 开发, 在线工具">
+                </div>
+                
+                <div class="form-group">
+                    <label for="itemContent">详细内容 *</label>
+                    <textarea id="itemContent" required placeholder="使用 Markdown 语法编写详细内容" rows="10"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" id="previewBtn">预览</button>
+                    <button type="submit" class="btn-primary">提交到 GitHub</button>
+                </div>
+            </form>
+            
+            <div class="preview-section" id="previewSection" style="display: none;">
+                <h3>预览效果</h3>
+                <div class="preview-card" id="previewCard"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
