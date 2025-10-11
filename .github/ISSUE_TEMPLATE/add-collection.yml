@@ -1,8 +1,8 @@
 ---
 name: 新增收藏
 description: 提交新的收藏项目到网站
-title: "新增收藏：[请填写标题]"
-labels: ["新增收藏"]
+title: "Add Favorite: [请填写标题]"
+labels: ["add-favorite"]
 body:
   - type: markdown
     attributes:
