@@ -20,15 +20,15 @@
    - 提交 Issue
 
 3. **自动处理**：
-   - 当 Issue 被添加 `add-favorite` 标签时，GitHub Actions 会自动触发处理
+   - 当 Issue 被添加 `add-favorite` 标签时，或标题以 "Add Favorite:" 开头时，GitHub Actions 会自动触发处理
    - 自动解析 Issue 内容并提取数据
-   - 自动创建包含新收藏的 Pull Request
-   - 在原 Issue 中评论 PR 链接
-   - **注意**：使用 Issue 模板会自动添加 `add-favorite` 标签
+   - 直接提交新收藏到仓库
+   - 自动关闭 Issue 并添加确认评论
+   - **注意**：使用 Issue 模板或网站提交会自动添加 `add-favorite` 标签
 
-4. **审核与合并**：
-   - 等待仓库维护者审核 PR
-   - 合并后新收藏自动添加到网站
+4. **自动部署**：
+   - 提交后自动触发部署流程
+   - 新收藏即刻上线到网站
 
 #### 方法二：直接编辑 data.js
 
