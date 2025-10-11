@@ -482,7 +482,7 @@ fetch(\`https://saucenao.com/search.php?api_key=\${apiKey}&url=\${imageUrl}\`)
         description: "每个较大的开源项目都有自己的风格指南：关于如何为该项目编写代码的一系列约定（有时候会比较武断）。当所有代码均保持一致的风格，在理解大型代码库时更为轻松。",
         tags: ["C++", "风格指南", "谷歌"],
         content: `
-```markdown
+\`\`\`markdown
 # Google 开源项目风格指南——中文版¶
 
 [地址](https://zh-google-styleguide.readthedocs.io/)
@@ -492,7 +492,7 @@ fetch(\`https://saucenao.com/search.php?api_key=\${apiKey}&url=\${imageUrl}\`)
 “风格”的含义涵盖范围广，从“变量使用驼峰格式（camelCase）”到“决不使用全局变量”再到“决不使用异常”，等等诸如此类。
 
 英文版项目维护的是在 Google 使用的编程风格指南。如果你正在修改的项目源自 Google，你可能会被引导至英文版项目页面，以了解项目所使用的风格。
-```
+\`\`\`
         `
     }
 ];
