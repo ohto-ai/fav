@@ -20,10 +20,11 @@
    - 提交 Issue
 
 3. **自动处理**：
-   - GitHub Actions 会自动检测带有 `新增收藏` 标签的 Issue
+   - 当 Issue 被添加 `add-favorite` 标签时，GitHub Actions 会自动触发处理
    - 自动解析 Issue 内容并提取数据
    - 自动创建包含新收藏的 Pull Request
    - 在原 Issue 中评论 PR 链接
+   - **注意**：使用 Issue 模板会自动添加 `add-favorite` 标签
 
 4. **审核与合并**：
    - 等待仓库维护者审核 PR
