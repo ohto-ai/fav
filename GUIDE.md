@@ -20,8 +20,9 @@
    - 提交 Issue
 
 3. **自动处理**：
-   - 当 Issue 被添加 `add-favorite` 标签时，或标题以 "Add Favorite:" 开头时，GitHub Actions 会自动触发处理
+   - 当 Issue 被添加 `add-favorite` 标签时，GitHub Actions 会自动触发处理
    - 自动解析 Issue 内容并提取数据
+   - 检查是否存在重复条目
    - 直接提交新收藏到仓库
    - 自动关闭 Issue 并添加确认评论
    - **注意**：使用 Issue 模板或网站提交会自动添加 `add-favorite` 标签
