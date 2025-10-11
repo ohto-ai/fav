@@ -135,7 +135,29 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data.js
           git commit -m "Add Favorite: ${{ steps.parse.outputs.title }} (#${{ github.event.issue.number }})"
-          git push
+          
+          # Pull latest changes and push with retry logic
+          max_attempts=5
+          attempt=1
+          until [ $attempt -gt $max_attempts ]; do
+            echo "Push attempt $attempt of $max_attempts..."
+            
+            # Pull with rebase to integrate any new changes
+            git pull --rebase origin ${{ github.ref_name }}
+            
+            # Try to push
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Push successful!"
+              exit 0
+            fi
+            
+            echo "Push failed, retrying..."
+            attempt=$((attempt + 1))
+            sleep 2
+          done
+          
+          echo "Failed to push after $max_attempts attempts"
+          exit 1
       
       - name: Close issue and comment
         uses: actions/github-script@v7
