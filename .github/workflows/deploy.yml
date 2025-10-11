@@ -1,44 +1,55 @@
-name: Deploy to GitHub Pages
+name: Deploy static content to Pages with branch-specific paths
 
 on:
-  # 当推送到 master 分支时触发
   push:
-    branches: [ "master" ]
-  
-  # 允许手动触发
+    # 监听所有分支，但排除 gh-pages 分支
+    branches: 
+      - '**'
+      - '!gh-pages'
+  # Removed pull_request trigger to prevent double execution and conflicts
+  # PRs should not create permanent deployments to gh-pages
+
   workflow_dispatch:
 
-# 设置 GITHUB_TOKEN 的权限
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
-# 只允许一个并发部署
+# Prevent concurrent deployments to avoid conflicts
 concurrency:
-  group: "pages"
+  group: github-pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  # 部署任务
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    # 如果是 gh-pages 分支的推送，直接跳过
+    if: github.ref != 'refs/heads/gh-pages'
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
         with:
-          # 上传整个仓库
-          path: '.'
-      
+          fetch-depth: 0
+
+      - name: Determine deployment path
+        run: |
+          if [ "${{ github.ref_name }}" = "dev" ]; then
+            echo "DEPLOY_PATH=." >> $GITHUB_ENV
+          else
+            echo "DEPLOY_PATH=br/${{ github.ref_name }}" >> $GITHUB_ENV
+          fi
+          echo "当前分支: ${{ github.ref_name }}"
+          echo "部署路径: $DEPLOY_PATH"
+
       - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          destination_dir: ${{ env.DEPLOY_PATH }}
+          keep_files: true
+          force_orphan: false
+          commit_message: 'Deploy ${{ github.ref_name }} branch to ${{ env.DEPLOY_PATH }} [skip ci]'
