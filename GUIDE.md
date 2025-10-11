@@ -4,6 +4,33 @@
 
 ### 1. 添加新的收藏
 
+#### 方法一：通过网站和 GitHub Issue（推荐）
+
+1. **在网站上提交**：
+   - 访问网站，点击 **"➕ 新增收藏"** 按钮
+   - 填写所有必填字段（标题、图标、描述、标签、详细内容）
+   - 点击 **"预览"** 查看效果
+   - 确认无误后点击 **"提交到 GitHub"**
+   - 自动跳转到 GitHub Issue 页面，确认并提交
+
+2. **直接在 GitHub 创建 Issue**：
+   - 访问 [Issues 页面](https://github.com/ohto-ai/fav/issues/new/choose)
+   - 选择 **"新增收藏"** 模板
+   - 填写表单中的所有字段
+   - 提交 Issue
+
+3. **自动处理**：
+   - GitHub Actions 会自动检测带有 `新增收藏` 标签的 Issue
+   - 自动解析 Issue 内容并提取数据
+   - 自动创建包含新收藏的 Pull Request
+   - 在原 Issue 中评论 PR 链接
+
+4. **审核与合并**：
+   - 等待仓库维护者审核 PR
+   - 合并后新收藏自动添加到网站
+
+#### 方法二：直接编辑 data.js
+
 编辑 `data.js` 文件，在 `collectionsData` 数组中添加新的收藏对象：
 
 ```javascript
