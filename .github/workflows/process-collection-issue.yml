@@ -1,8 +1,8 @@
-name: 自动处理新增收藏 Issue
+name: Auto Process Add Favorite Issue
 
 on:
   issues:
-    types: [opened, edited]
+    types: [labeled]
 
 permissions:
   contents: write
@@ -11,8 +11,8 @@ permissions:
 
 jobs:
   process-new-collection:
-    # 只处理带有"新增收藏"标签的 Issue
-    if: contains(github.event.issue.labels.*.name, '新增收藏')
+    # Only process issues with "add-favorite" label
+    if: github.event.label.name == 'add-favorite'
     runs-on: ubuntu-latest
     
     steps:
@@ -35,24 +35,27 @@ jobs:
             // 解析 Issue 内容
             let title, icon, description, tags, content;
             
-            // 方法1: 尝试解析 YAML 格式（从网站前端生成的）
+            // Method 1: Try parsing YAML format (generated from website frontend)
             const yamlMatch = issueBody.match(/```yaml\s*\ntitle:\s*(.+?)\nicon:\s*(.+?)\ndescription:\s*(.+?)\ntags:\s*(.+?)\n```/s);
             
             if (yamlMatch) {
-              // 从 YAML 格式解析
+              // Parse from YAML format
               title = yamlMatch[1].trim();
               icon = yamlMatch[2].trim();
               description = yamlMatch[3].trim();
               tags = yamlMatch[4].trim().split(',').map(t => t.trim());
               
-              // 提取 Markdown 内容
-              const contentMatch = issueBody.match(/## 详细内容\s*\n\s*```markdown\s*\n([\s\S]+?)```/);
+              // Extract Markdown content (support both English and Chinese headers)
+              let contentMatch = issueBody.match(/## Detailed Content\s*\n\s*```markdown\s*\n([\s\S]+?)```/);
+              if (!contentMatch) {
+                contentMatch = issueBody.match(/## 详细内容\s*\n\s*```markdown\s*\n([\s\S]+?)```/);
+              }
               content = contentMatch ? contentMatch[1].trim() : '';
             } else {
-              // 方法2: 尝试解析 GitHub Issue 表单格式
+              // Method 2: Try parsing GitHub Issue form format
               const formData = {};
               
-              // 解析表单提交的格式
+              // Parse form submission format (support both Chinese and English labels)
               const titleMatch = issueBody.match(/### 标题\s*\n\s*(.+?)(?=\n###|\n\n|$)/s);
               const iconMatch = issueBody.match(/### 图标\s*\n\s*(.+?)(?=\n###|\n\n|$)/s);
               const descMatch = issueBody.match(/### 描述\s*\n\s*(.+?)(?=\n###|\n\n|$)/s);
@@ -60,7 +63,7 @@ jobs:
               const contentMatch = issueBody.match(/### 详细内容\s*\n\s*([\s\S]+?)(?=\n###|$)/s);
               
               if (!titleMatch || !iconMatch || !descMatch || !tagsMatch || !contentMatch) {
-                throw new Error('无法解析 Issue 格式，请确保使用正确的模板');
+                throw new Error('Unable to parse issue format. Please ensure you are using the correct template.');
               }
               
               title = titleMatch[1].trim();
@@ -131,28 +134,28 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "新增收藏：${{ fromJSON(steps.parse.outputs.result).title }} (#${{ github.event.issue.number }})"
+          commit-message: "Add Favorite: ${{ fromJSON(steps.parse.outputs.result).title }} (#${{ github.event.issue.number }})"
           branch: auto-add-collection-${{ github.event.issue.number }}
           delete-branch: true
-          title: "新增收藏：${{ fromJSON(steps.parse.outputs.result).title }}"
+          title: "Add Favorite: ${{ fromJSON(steps.parse.outputs.result).title }}"
           body: |
-            此 PR 自动处理 Issue #${{ github.event.issue.number }} 中提交的新增收藏请求。
+            This PR automatically processes the add favorite request submitted in Issue #${{ github.event.issue.number }}.
             
-            ## 新增内容
+            ## New Content
             
-            - **标题**: ${{ fromJSON(steps.parse.outputs.result).title }}
+            - **Title**: ${{ fromJSON(steps.parse.outputs.result).title }}
             - **ID**: ${{ fromJSON(steps.parse.outputs.result).newId }}
             
-            ## 检查清单
+            ## Checklist
             
-            - [ ] 验证内容格式正确
-            - [ ] 确认没有重复项
-            - [ ] 检查标签是否合适
+            - [ ] Verify content format is correct
+            - [ ] Confirm no duplicates
+            - [ ] Check if tags are appropriate
             
-            关闭 #${{ github.event.issue.number }}
+            Closes #${{ github.event.issue.number }}
           labels: |
-            自动生成
-            新增收藏
+            auto-generated
+            add-favorite
       
       - name: Comment on issue
         if: steps.cpr.outputs.pull-request-number
@@ -167,7 +170,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              body: `✅ 已自动创建 Pull Request #${prNumber} 来添加此收藏。\n\n请等待审核和合并。`
+              body: `✅ Pull Request #${prNumber} has been automatically created to add this favorite.\n\nPlease wait for review and merge.`
             });
       
       - name: Comment on error
@@ -182,5 +185,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              body: `❌ 自动处理失败。请检查 Issue 格式是否正确，或手动添加到 data.js 文件中。\n\n查看错误详情: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+              body: `❌ Automatic processing failed. Please check if the issue format is correct, or manually add it to the data.js file.\n\nView error details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
             });
