@@ -504,5 +504,15 @@ fetch(\`https://saucenao.com/search.php?api_key=\${apiKey}&url=\${imageUrl}\`)
         content: `
 https://www.acgbox.link/
         `
+    },
+    {
+        id: 14,
+        title: "游戏下载网站",
+        icon: "https://gamingbeasts.com/favicon.ico",
+        description: "game download",
+        tags: ["在线工具"],
+        content: `
+gamingbeasts.com
+        `
     }
 ];
