@@ -343,66 +343,14 @@ int main() {
     },
     {
         id: 10,
-        title: "舔狗日记 API",
+        title: "疯狂星期四文案生成器",
         icon: "😂",
-        description: "生成随机舔狗日记的趣味 API，为项目增添娱乐元素",
-        tags: ["API", "趣味", "娱乐", "随机生成"],
+        description: "生成随机疯狂星期四文案",
+        tags: ["文案", "趣味", "娱乐", "疯狂星期四"],
         content: `
-# 舔狗日记 API
+# 疯狂星期四文案生成器
 
-一个有趣的随机文本生成 API，可以生成各种风格的舔狗日记内容。
-
-## 接口说明
-
-- **接口地址**：https://kfc.shadiao.pro/
-- **请求方式**：GET
-- **返回格式**：纯文本
-- **无需认证**：完全免费使用
-
-## 使用方法
-
-### 基本调用
-\`\`\`bash
-curl https://kfc.shadiao.pro/
-\`\`\`
-
-### JavaScript 示例
-\`\`\`javascript
-fetch('https://kfc.shadiao.pro/')
-    .then(response => response.text())
-    .then(text => console.log(text));
-\`\`\`
-
-### Python 示例
-\`\`\`python
-import requests
-
-response = requests.get('https://kfc.shadiao.pro/')
-print(response.text)
-\`\`\`
-
-## 应用场景
-
-1. **趣味项目**：为应用添加娱乐元素
-2. **占位文本**：替代 Lorem ipsum
-3. **测试数据**：生成随机文本内容
-4. **社交分享**：制作趣味表情包
-
-## API 特点
-
-- 完全免费
-- 无需注册
-- 无请求限制
-- 响应速度快
-- 内容丰富
-
-## 注意事项
-
-- 内容纯属娱乐，切勿当真
-- 请合理使用，避免滥用
-- 内容随机生成，可能重复
-
-访问 [舔狗日记 API](https://kfc.shadiao.pro/) 获取随机内容。
+访问 [疯狂星期四文案生成器](https://kfc.shadiao.pro/) 获取随机内容。
         `
     },
     {
@@ -502,7 +450,7 @@ fetch(\`https://saucenao.com/search.php?api_key=\${apiKey}&url=\${imageUrl}\`)
         description: "专注ACG的导航盒子",
         tags: ["ACG", "动漫", "导航"],
         content: `
-https://www.acgbox.link/
+[acgbox.link](https://www.acgbox.link/)
         `
     },
     {
@@ -512,7 +460,7 @@ https://www.acgbox.link/
         description: "game download",
         tags: ["在线工具"],
         content: `
-gamingbeasts.com
+[gamingbeasts.com](https://gamingbeasts.com)
         `
     }
 ];
