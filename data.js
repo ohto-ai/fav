@@ -494,5 +494,15 @@ fetch(\`https://saucenao.com/search.php?api_key=\${apiKey}&url=\${imageUrl}\`)
 英文版项目维护的是在 Google 使用的编程风格指南。如果你正在修改的项目源自 Google，你可能会被引导至英文版项目页面，以了解项目所使用的风格。
 \`\`\`
         `
+    },
+    {
+        id: 13,
+        title: "ACG盒子",
+        icon: "https://www.acgbox.link/favicon.ico",
+        description: "专注ACG的导航盒子",
+        tags: ["ACG", "动漫", "导航"],
+        content: `
+https://www.acgbox.link/
+        `
     }
 ];
