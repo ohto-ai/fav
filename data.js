@@ -472,5 +472,15 @@ fetch(\`https://saucenao.com/search.php?api_key=\${apiKey}&url=\${imageUrl}\`)
         content: `
 [deepwiki.com/](https://deepwiki.com/)
         `
+    },
+    {
+        id: 16,
+        title: "Fmread 学术工具网站",
+        icon: "https://www.fmread.com/static/icon.png",
+        description: "一个简约而不简单的工具网站",
+        tags: ["学术", "工具", "文献", "论文"],
+        content: `
+地址 [fmread](https://www.fmread.com/)
+        `
     }
 ];
