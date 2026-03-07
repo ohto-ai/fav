@@ -107,18 +107,25 @@ jobs:
             
             console.log('New ID:', newId);
             
-            // 转义特殊字符
+            // 转义特殊字符 (for template literals - backticks and ${...})
             const escapeStr = (str) => str.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+            
+            // 转义双引号字符串中的特殊字符 (for double-quoted JS strings)
+            const escapeDoubleQuoted = (str) => str
+              .replace(/\\/g, '\\\\')
+              .replace(/"/g, '\\"')
+              .replace(/\r?\n/g, '\\n')
+              .replace(/\t/g, '\\t');
             
             // 生成新的收藏对象代码
             const newItem = `    {
                     id: ${newId},
-                    title: "${title.replace(/"/g, '\\"')}",
-                    icon: "${icon.replace(/"/g, '\\"')}",
-                    description: "${description.replace(/"/g, '\\"')}",
-                    tags: [${tags.map(t => `"${t.replace(/"/g, '\\"')}"`).join(', ')}],
+                    title: "${escapeDoubleQuoted(title)}",
+                    icon: "${escapeDoubleQuoted(icon)}",
+                    description: "${escapeDoubleQuoted(description)}",
+                    tags: [${tags.map(t => `"${escapeDoubleQuoted(t)}"`).join(', ')}],
                     content: \`
-            ${content}
+            ${escapeStr(content)}
                     \`
                 }`;
             
@@ -138,6 +145,12 @@ jobs:
             core.setOutput('title', title);
             core.setOutput('newId', newId);
             core.setOutput('issueNumber', issueNumber);
+      
+      - name: Validate data.js syntax
+        if: steps.parse.outputs.skipped != 'true'
+        run: |
+          node --check data.js || { echo "❌ data.js syntax validation failed! The generated file has invalid JavaScript syntax."; exit 1; }
+          echo "✅ data.js syntax validation passed"
       
       - name: Commit and push changes
         if: steps.parse.outputs.skipped != 'true'
