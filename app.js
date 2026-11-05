@@ -15,7 +15,23 @@ const state = {
     search: '',
     view: localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid',
     drawerId: null,
+    editingId: null, // 非空时模态框处于编辑模式
 };
+
+// 管理密码存 localStorage（避免每次输入）；旧版本存过 sessionStorage，读取时兼容
+function getPassword() {
+    return localStorage.getItem(PASSWORD_KEY) || sessionStorage.getItem(PASSWORD_KEY) || '';
+}
+
+function savePassword(password) {
+    localStorage.setItem(PASSWORD_KEY, password);
+    sessionStorage.removeItem(PASSWORD_KEY); // 清掉旧版本残留
+}
+
+function clearPassword() {
+    localStorage.removeItem(PASSWORD_KEY);
+    sessionStorage.removeItem(PASSWORD_KEY);
+}
 
 // ---------- 基础工具 ----------
 
@@ -129,9 +145,9 @@ async function fetchFavorites() {
     return payload.data;
 }
 
-async function createFavorite(payload, password) {
-    const response = await fetch(API_URL, {
-        method: 'POST',
+async function createFavorite(payload, password, id = null) {
+    const response = await fetch(id ? `${API_URL}/${id}` : API_URL, {
+        method: id ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', 'x-fav-key': password },
         body: JSON.stringify(payload)
     });
@@ -372,7 +388,9 @@ function drawerHtml(item) {
             ${item.content ? `<div class="md">${parseMarkdown(item.content)}</div>` : ''}
         </div>
         <footer class="drawer-foot">
-            <button class="btn btn-secondary" id="drawerCopyBtn">⧉ 复制链接</button>
+            <button class="btn btn-secondary" id="drawerCopyBtn" title="复制链接">⧉ 复制</button>
+            <button class="btn btn-secondary" id="drawerEditBtn" title="编辑收藏">✎ 编辑</button>
+            <button class="btn btn-danger" id="drawerDeleteBtn" title="删除收藏">🗑 删除</button>
             ${item.url && isSafeUrl(item.url)
                 ? `<a class="btn btn-primary" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">访问 ↗</a>`
                 : ''}
@@ -398,7 +416,7 @@ function closeDrawer() {
     setTimeout(() => { $('drawerBackdrop').hidden = true; }, 260);
 }
 
-// ---------- 复制链接 ----------
+// ---------- 复制链接 / 删除确认 ----------
 
 async function copyText(text) {
     try {
@@ -430,14 +448,92 @@ function toast(message) {
     }, 2200);
 }
 
-// ---------- 新增收藏模态框 ----------
+// 删除采用两步确认：第一次点把按钮变成「确认删除？」，4 秒内再点才真正执行
+let deleteArmedTimer = null;
 
-function openModal() {
-    // 上次提交成功过的密码留在 sessionStorage（关标签页即清除），免去重复输入
-    const saved = sessionStorage.getItem(PASSWORD_KEY);
+function resetDeleteArmed() {
+    clearTimeout(deleteArmedTimer);
+    const btn = document.getElementById('drawerDeleteBtn');
+    if (btn) {
+        btn.textContent = '🗑 删除';
+        btn.classList.remove('armed');
+        btn.disabled = false;
+    }
+}
+
+async function handleDeleteClick(deleteBtn) {
+    if (!deleteBtn.classList.contains('armed')) {
+        deleteBtn.classList.add('armed');
+        deleteBtn.textContent = '确认删除？';
+        clearTimeout(deleteArmedTimer);
+        deleteArmedTimer = setTimeout(resetDeleteArmed, 4000);
+        return;
+    }
+
+    const item = findItem(state.drawerId);
+    if (!item) return;
+    const password = getPassword();
+    if (!password) {
+        toast('请先在表单里输入过管理密码，再执行删除');
+        resetDeleteArmed();
+        return;
+    }
+
+    deleteBtn.disabled = true;
+    deleteBtn.textContent = '删除中…';
+    try {
+        const response = await fetch(`${API_URL}/${item.id}`, {
+            method: 'DELETE',
+            headers: { 'x-fav-key': password }
+        });
+        const body = await response.json().catch(() => null);
+
+        if (response.status === 200 && body && body.success) {
+            state.items = state.items.filter((it) => it.id !== item.id);
+            state.drawerId = null;
+            renderSidebar();
+            applyFilters();
+            closeDrawer();
+            toast('🗑 已删除');
+            return;
+        }
+        if (response.status === 403) {
+            clearPassword();
+            toast('管理密码错误，请检查后重试');
+        } else {
+            toast((body && body.error) || `删除失败（${response.status}）`);
+        }
+    } catch {
+        toast('网络错误，请稍后再试');
+    }
+    resetDeleteArmed();
+}
+
+// ---------- 新增 / 编辑收藏模态框 ----------
+
+function openModal(item = null) {
+    state.editingId = item ? item.id : null;
+    $('modalTitle').textContent = item ? '编辑收藏' : '新增收藏';
+    $('submitBtn').textContent = item ? '保存修改' : '保存收藏';
+    setUrlHint('', '');
+
+    // 密码输入过一次就不再问（localStorage 持久保存）
+    const saved = getPassword();
     if (saved) $('itemPassword').value = saved;
     setFormStatus('');
     showFormPanel();
+
+    if (item) {
+        // 编辑：把现有内容灌进表单；icon 的默认值 🎯 也显示出来，
+        // 这样自动填充就不会把它当成"空字段"去抓 favicon
+        $('itemTitle').value = item.title || '';
+        $('itemUrl').value = item.url || '';
+        $('itemIcon').value = item.icon || '';
+        $('itemTags').value = (item.tags || []).join(', ');
+        $('itemDescription').value = item.description || '';
+        $('itemContent').value = item.content || '';
+    }
+
     const backdrop = $('modalBackdrop');
     backdrop.hidden = false;
     requestAnimationFrame(() => document.body.classList.add('modal-open'));
@@ -445,6 +541,7 @@ function openModal() {
 }
 
 function closeModal() {
+    state.editingId = null;
     document.body.classList.remove('modal-open');
     setTimeout(() => { $('modalBackdrop').hidden = true; }, 220);
 }
@@ -459,6 +556,58 @@ function setFormStatus(kind, message) {
     status.className = `form-status${kind ? ` ${kind}` : ''}${message ? ' show' : ''}`;
     status.textContent = message || '';
 }
+
+// ---------- 链接自动填充（抓取目标站点的标题 / 描述 / 图标） ----------
+
+let urlFetchTimer = null;
+
+function setUrlHint(kind, message) {
+    const hint = $('urlFetchHint');
+    hint.className = `url-hint${kind ? ` ${kind}` : ''}`;
+    hint.textContent = message || '';
+}
+
+const autofillFromUrl = debounce(async () => {
+    const raw = $('itemUrl').value.trim();
+    if (!raw || !isSafeUrl(raw)) { setUrlHint('', ''); return; }
+
+    // 抓取接口与写接口一样要密码；没存过密码就不打扰用户
+    const password = getPassword();
+    if (!password) { setUrlHint('', ''); return; }
+
+    // 只填空字段；没有可填的就不浪费请求
+    if ($('itemTitle').value.trim() && $('itemDescription').value.trim() && $('itemIcon').value.trim()) {
+        return;
+    }
+
+    setUrlHint('fetching', '🔍 正在获取站点信息…');
+    try {
+        const response = await fetch(`/api/preview?url=${encodeURIComponent(raw)}`, {
+            headers: { 'x-fav-key': password }
+        });
+        if (response.status === 403) {
+            setUrlHint('error', '管理密码无效，无法自动获取');
+            return;
+        }
+        const body = await response.json().catch(() => null);
+        if (!response.ok || !body || !body.success) { setUrlHint('', ''); return; }
+        if ($('itemUrl').value.trim() !== raw) return; // 输入框已经变了，丢弃过期结果
+
+        const { title, description, icon } = body.data;
+        const filled = [];
+        if (title && !$('itemTitle').value.trim()) { $('itemTitle').value = title; filled.push('标题'); }
+        if (description && !$('itemDescription').value.trim()) { $('itemDescription').value = description; filled.push('描述'); }
+        if (icon && !$('itemIcon').value.trim()) { $('itemIcon').value = icon; filled.push('图标'); }
+
+        if (filled.length) {
+            setUrlHint('success', `✨ 已自动填充：${filled.join('、')}（可自由修改）`);
+        } else {
+            setUrlHint('', '');
+        }
+    } catch {
+        setUrlHint('', ''); // 抓取失败不打扰用户，表单照常手填
+    }
+}, 600);
 
 function previewItem() {
     const title = $('itemTitle').value.trim();
@@ -521,17 +670,28 @@ async function handleFormSubmit(e) {
             description: description || undefined,
             tags: tags || undefined,
             content: content || undefined
-        }, password);
+        }, password, state.editingId);
 
-        if (status === 201 && body && body.success) {
-            // 密码正确，记住它；新收藏插到最前面，不整页刷新
-            sessionStorage.setItem(PASSWORD_KEY, password);
-            state.items.unshift(body.data);
-            state.selectedTags.clear();
-            renderSidebar();
-            applyFilters();
-            closeModal();
-            toast('✅ 已添加收藏');
+        if ((status === 201 || status === 200) && body && body.success) {
+            // 密码正确，记住它（localStorage，下次免输）
+            savePassword(password);
+            if (state.editingId) {
+                // 编辑：原地替换，保持列表顺序不变
+                const index = state.items.findIndex((it) => it.id === state.editingId);
+                if (index !== -1) state.items[index] = body.data;
+                renderSidebar();
+                applyFilters();
+                closeModal();
+                toast('✅ 已保存修改');
+            } else {
+                // 新增：插到列表最前面，不整页刷新
+                state.items.unshift(body.data);
+                state.selectedTags.clear();
+                renderSidebar();
+                applyFilters();
+                closeModal();
+                toast('✅ 已添加收藏');
+            }
             return;
         }
 
@@ -540,8 +700,11 @@ async function handleFormSubmit(e) {
                 setFormStatus('error', (body && body.error) || '提交内容未通过校验');
                 break;
             case 403:
-                sessionStorage.removeItem(PASSWORD_KEY);
+                clearPassword();
                 setFormStatus('error', '管理密码错误，请检查后重试');
+                break;
+            case 404:
+                setFormStatus('error', '这条收藏已被删除，刷新页面看看');
                 break;
             case 409:
                 setFormStatus('error', '这条链接已经收藏过了');
@@ -623,6 +786,9 @@ function bindEvents() {
         searchInput.focus();
     });
 
+    // 链接输入防抖后自动抓取站点信息填充表单
+    $('itemUrl').addEventListener('input', autofillFromUrl);
+
     // 视图切换
     document.querySelectorAll('.view-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -676,11 +842,25 @@ function bindEvents() {
     $('drawerBackdrop').addEventListener('click', closeDrawer);
     $('drawer').addEventListener('click', (e) => {
         if (e.target.closest('#drawerCloseBtn')) { closeDrawer(); return; }
+
         if (e.target.closest('#drawerCopyBtn')) {
             const item = findItem(state.drawerId);
             if (item && item.url) {
-                copyText(item.url).then((ok) => toast(ok ? '🔗 链接已复制' : '复制失败'));
+                copyText(item.url).then((copied) => toast(copied ? '🔗 链接已复制' : '复制失败'));
             }
+            return;
+        }
+
+        if (e.target.closest('#drawerEditBtn')) {
+            const item = findItem(state.drawerId);
+            closeDrawer();
+            if (item) openModal(item);
+            return;
+        }
+
+        const deleteBtn = e.target.closest('#drawerDeleteBtn');
+        if (deleteBtn) {
+            handleDeleteClick(deleteBtn);
         }
     });
 

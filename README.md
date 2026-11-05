@@ -12,7 +12,9 @@
 - 🌓 **主题切换** - 亮色/暗色模式，跟随记忆
 - 📝 **Markdown 支持** - 详细内容用 Markdown 编写（先转义再渲染，杜绝 XSS）
 - ✍️ **表单直提交** - 填完即入库，无需跳转 GitHub
-- 🔑 **密码保护写入** - 管理密码存 Cloudflare Secret，读取公开、写入受控
+- ✂️ **编辑 / 删除** - 详情抽屉里直接改；删除有两步确认
+- 🤖 **链接自动填充** - 输入网址自动抓取标题/描述/图标（支持 gbk 等中文站编码）
+- 🔑 **密码保护写入** - 管理密码存 Cloudflare Secret，本机 localStorage 记住一次输入
 - 🚀 **零依赖前端** - 无框架、无构建步骤
 
 ## 🏗️ 架构
@@ -37,6 +39,9 @@ Cloudflare Pages
 |---|---|---|---|
 | GET | `/api/favorites` | 无 | 列表，`created_at` 倒序。可选 `?limit=`（1–1000，默认 500） |
 | POST | `/api/favorites` | `x-fav-key` 请求头 = `FAV_PASSWORD` | 新增收藏。JSON body：`{title, url, icon?, description?, tags?, content?}` |
+| PUT | `/api/favorites/:id` | 密码 | 全量更新，body 同 POST，返回更新后的完整记录 |
+| DELETE | `/api/favorites/:id` | 密码 | 删除单条 |
+| GET | `/api/preview?url=` | 密码 | 抓取目标站点的标题/描述/图标，供表单自动填充。只读 `<head>` 附近字节、自动识别 gbk 等编码、拒绝内网地址、8 秒超时 |
 
 响应统一为 `{success, data}` 或 `{success: false, error}`。错误码：
 
@@ -44,8 +49,10 @@ Cloudflare Pages
 |---|---|
 | 400 | 校验失败（error 里有具体原因） |
 | 403 | 密码错误或缺失 |
+| 404 | 收藏不存在（可能已被删除） |
 | 409 | 该链接已收藏过（url 唯一索引） |
 | 500 | 数据库写入失败 |
+| 502/504 | 抓取目标站点失败/超时 |
 | 503 | 服务端未设置 `FAV_PASSWORD`（fail closed，不会静默放开写入） |
 
 服务端校验规则：`title` 必填 ≤120 字；`url` 必填、合法 http(s) URL ≤2048 字；`icon` 可选（emoji 或图片 URL）；`description` ≤300 字；`tags` 可选，数组或逗号分隔，≤20 个；`content` 可选 Markdown ≤20000 字。

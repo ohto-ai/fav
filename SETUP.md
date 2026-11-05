@@ -111,8 +111,10 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST https://fav.ohtoai.top/api/favo
 
 ## 日常使用
 
-- **新增**：网站右上角「➕ 新增收藏」→ 填表 → 提交，即时生效
-- **改/删**：暂无界面。D1 控制台（Dashboard → D1 → fav → Console）执行 SQL，例如：
+- **新增**：网站右上角「＋ 新增收藏」→ 粘贴链接后自动抓取标题/描述/图标（可修改）→ 填密码 → 提交，即时生效
+- **编辑 / 删除**：点开任意卡片的详情抽屉 → 「✎ 编辑」或「🗑 删除」（删除需两步确认）
+- **密码**：输入一次后保存在浏览器 localStorage，换设备/换浏览器需重输；改密码后浏览器里存着旧值会一直 403，在表单里输入新密码提交一次即可覆盖
+- **批量操作**：暂无界面，D1 控制台（Dashboard → D1 → fav → Console）执行 SQL，例如：
   ```sql
   DELETE FROM favorites WHERE id = 42;
   ```
