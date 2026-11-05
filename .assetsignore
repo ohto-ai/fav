@@ -1,0 +1,17 @@
+# wrangler pages deploy 的资产排除清单（语法同 .gitignore）
+# functions/ 不在清单里——它会被打包成 Pages Functions，必须上传
+node_modules
+.wrangler
+.dev.vars
+.zcode
+.git
+.github
+.gitignore
+package.json
+package-lock.json
+scripts
+migrations
+SETUP.md
+README.md
+LICENSE
+wrangler.toml
