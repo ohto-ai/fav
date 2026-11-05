@@ -1,0 +1,20 @@
+# 收藏集网站 · Cloudflare Pages 配置
+#
+# name 必须与 Cloudflare Pages 项目名一致（见 SETUP.md 第 4 步），
+# 一致时 git 集成构建会自动读取本文件应用 D1 绑定，不用在后台手动配；
+# 不一致时后台会提示忽略本文件，需要去 Pages 项目 Settings → Bindings 手动加。
+
+name = "fav"
+compatibility_date = "2026-09-01"
+
+# 纯静态 + functions/ 目录，没有构建步骤，仓库根目录就是产物目录
+pages_build_output_dir = "."
+
+# ---------- 绑定 ----------
+
+[[d1_databases]]
+binding = "DB"                # 代码里用 env.DB 访问（functions/api/favorites.js）
+database_name = "fav"
+# 本地开发用不到真实 ID；执行 `npx wrangler d1 create fav` 后，
+# 把输出里的 database_id 换掉下面的占位值（SETUP.md 第 1 步）
+database_id = "ee1912c9-8d2c-4965-9b13-b048f0fb2e81"

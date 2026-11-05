@@ -17,6 +17,12 @@ tmp/
 temp/
 *.tmp
 
+# Cloudflare / Node
+.dev.vars
+.wrangler/
+node_modules/
+.zcode/
+
 # 操作系统
 Thumbs.db
 .DS_Store
