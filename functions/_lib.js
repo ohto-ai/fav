@@ -87,11 +87,11 @@ function validateUrl(raw) {
   return { value: parsed.href };
 }
 
-/** 图标：emoji/短文本，或 http(s) 图片地址；为空时用默认图标 */
+/** 图标：emoji/短文本、http(s) 图片地址或 data:image URI；为空时用默认图标 */
 function validateIcon(raw) {
   const icon = String(raw || '').trim();
   if (!icon) return { value: DEFAULT_ICON };
-  if (/^https?:\/\//i.test(icon)) {
+  if (/^(https?:\/\/|data:image\/)/i.test(icon)) {
     if (icon.length > LIMITS.iconUrl) return { error: `图标 URL 过长（最多 ${LIMITS.iconUrl} 字符）` };
     return { value: icon };
   }

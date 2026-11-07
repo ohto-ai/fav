@@ -154,8 +154,11 @@ function decodeBody(bytes, contentType) {
 
 /** 从 HTML 提取标题 / 描述 / 图标候选列表 */
 function extractMeta(html, pageUrl) {
-  const metas = html.match(/<meta\s+[^>]*>/gi) || [];
-  const links = html.match(/<link\s+[^>]*>/gi) || [];
+  // 标签切分必须容忍引号内的 ">"：data URI 图标长这样
+  // <link rel="icon" href="data:image/svg+xml,<svg ...>🍜</svg>">
+  // 用朴素的 /<link[^>]*>/ 会在引号里的 ">" 处截断，图标就丢了
+  const metas = html.match(/<meta\b(?:"[^"]*"|'[^']*'|[^"'>])*>/gi) || [];
+  const links = html.match(/<link\b(?:"[^"]*"|'[^']*'|[^"'>])*>/gi) || [];
 
   const metaContent = (key) => {
     const wanted = key.toLowerCase();
@@ -227,6 +230,13 @@ function collectIconCandidates(links, pageUrl) {
     }
     if (score < 0) continue;
 
+    // data URI 图标（emoji SVG 是这类用法的大户）自包含、无需解析相对路径，
+    // 也不走网络验证，直接当高质量候选
+    if (/^data:image\//i.test(hrefs[0])) {
+      candidates.push({ href: hrefs[0], score: 500 });
+      continue;
+    }
+
     let href;
     try {
       href = new URL(hrefs[0], pageUrl).href;
@@ -254,7 +264,8 @@ function parseIconSize(tag) {
  */
 async function resolveIcon(candidates, pageUrl, ogImage) {
   const tried = [];
-  for (const href of candidates.slice(0, 3)) {
+  for (const href of candidates.slice(0, 4)) {
+    if (/^data:image\//i.test(href)) return href; // 自包含，无需网络验证
     if (await urlLooksLikeImage(href)) return href;
     tried.push(href);
   }

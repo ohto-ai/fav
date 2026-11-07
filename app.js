@@ -106,9 +106,15 @@ async function submitUnlock() {
             updateUnlockIcon();
             setUnlockStatus('success', '✅ 已解锁，本机浏览器将记住密码');
             setTimeout(() => finishUnlock(password), 400);
-            // 如果解锁是在表单里触发的（比如点了抓取提示），顺手再跑一次填充
+            // 解锁是在表单里触发的话，续跑解锁前挂起的动作（自动填充或手动刷新）
+            const followUp = afterUnlockAction || 'auto';
+            afterUnlockAction = null;
             if (!document.getElementById('modalBackdrop').hidden) {
-                autofillFromUrl();
+                if (followUp === 'manual') {
+                    refreshFromSiteInfo();
+                } else {
+                    autofillFromUrl();
+                }
             }
         } else if (response.status === 403) {
             btn.disabled = false;
@@ -124,6 +130,7 @@ async function submitUnlock() {
 }
 
 function cancelUnlock() {
+    afterUnlockAction = null;
     finishUnlock(null);
 }
 
@@ -146,7 +153,8 @@ function isSafeUrl(url) {
 
 function iconHtml(icon, title) {
     const safe = escapeHtml(icon);
-    if (isSafeUrl(icon)) {
+    // http(s) 图片和 data:image URI 都按图片渲染（后者是 emoji favicon 的大户）
+    if (/^(https?:\/\/|data:image\/)/i.test(icon)) {
         return `<img src="${safe}" alt="${escapeHtml(title)}" loading="lazy" referrerpolicy="no-referrer">`;
     }
     return safe;
@@ -648,9 +656,10 @@ function setFormStatus(kind, message) {
     status.textContent = message || '';
 }
 
-// ---------- 链接自动填充（抓取目标站点的标题 / 描述 / 图标） ----------
+// ---------- 链接自动填充 / 手动抓取（站点标题 / 描述 / 图标） ----------
 
 let urlFetchTimer = null;
+let afterUnlockAction = null; // 解锁成功后要续跑的动作：'auto' / 'manual'
 
 function setUrlHint(kind, message) {
     const hint = $('urlFetchHint');
@@ -658,58 +667,118 @@ function setUrlHint(kind, message) {
     hint.textContent = message || '';
 }
 
-const autofillFromUrl = debounce(async () => {
+function currentFetchUrl() {
     const inputValue = $('itemUrl').value.trim();
-    if (!inputValue) { setUrlHint('', ''); return; }
-    // 容忍不带协议的输入（example.com → https://example.com），抓取用补全值，
-    // 陈旧结果判断用原始输入值，两者不能混用
-    let fetchUrl = inputValue;
-    if (!/^https?:\/\//i.test(fetchUrl)) fetchUrl = 'https://' + fetchUrl;
-    if (!isSafeUrl(fetchUrl)) { setUrlHint('', ''); return; }
+    if (!inputValue) return null;
+    // 容忍不带协议的输入（example.com → https://example.com）
+    const fetchUrl = /^https?:\/\//i.test(inputValue) ? inputValue : 'https://' + inputValue;
+    return isSafeUrl(fetchUrl) ? { inputValue, fetchUrl } : null;
+}
 
-    // 抓取接口与写接口一样要密码；没解锁时给出可点击的解锁入口，而不是静默跳过
-    if (!getPassword()) {
-        setUrlHint('action', '🔒 解锁管理后即可自动获取站点信息（点击解锁）');
-        return;
-    }
-
-    // 只填空字段；没有可填的就不浪费请求
-    if ($('itemTitle').value.trim() && $('itemDescription').value.trim() && $('itemIcon').value.trim()) {
-        return;
-    }
-
+/**
+ * 抓取站点信息并填充。applyMode：
+ *   'auto'   只填空字段（新增时自动触发，绝不覆盖已填内容）
+ *   'manual' 用户点了 🔄 按钮，按抓取结果明确覆盖
+ */
+async function fetchAndApplySiteInfo(applyMode, inputValue, fetchUrl) {
     setUrlHint('fetching', '🔍 正在获取站点信息…');
     try {
-        const response = await fetch(`/api/preview?url=${encodeURIComponent(fetchUrl)}`, {
-            headers: { 'x-fav-key': getPassword() }
+        let password = getPassword();
+        let response = await fetch(`/api/preview?url=${encodeURIComponent(fetchUrl)}`, {
+            headers: { 'x-fav-key': password }
         });
+        let body = await response.json().catch(() => null);
+
         if (response.status === 403) {
-            setUrlHint('error', '管理密码无效，无法自动获取');
-            return;
+            // 密码失效（后台改过密码）：弹解锁框，成功后重试一次
+            clearPassword();
+            setUrlHint('error', '管理密码已失效，请在弹窗中重新输入');
+            password = await requestPassword('重新解锁');
+            if (!password) { setUrlHint('', ''); return; }
+            response = await fetch(`/api/preview?url=${encodeURIComponent(fetchUrl)}`, {
+                headers: { 'x-fav-key': password }
+            });
+            body = await response.json().catch(() => null);
+            if (response.status === 403) {
+                setUrlHint('error', '管理密码仍无效，请检查 Cloudflare Secret');
+                return;
+            }
         }
-        const body = await response.json().catch(() => null);
         if (!response.ok || !body || !body.success) { setUrlHint('', ''); return; }
         if ($('itemUrl').value.trim() !== inputValue) {
-            // 输入框已经变了，丢弃过期结果
+            // 链接已经改了，丢弃过期结果
             setUrlHint('', '');
             return;
         }
 
         const { title, description, icon } = body.data;
-        const filled = [];
-        if (title && !$('itemTitle').value.trim()) { $('itemTitle').value = title; filled.push('标题'); }
-        if (description && !$('itemDescription').value.trim()) { $('itemDescription').value = description; filled.push('描述'); }
-        if (icon && !$('itemIcon').value.trim()) { $('itemIcon').value = icon; filled.push('图标'); }
-
-        if (filled.length) {
-            setUrlHint('success', `✨ 已自动填充：${filled.join('、')}（可自由修改）`);
+        if (applyMode === 'auto') {
+            const filled = [];
+            if (title && !$('itemTitle').value.trim()) { $('itemTitle').value = title; filled.push('标题'); }
+            if (description && !$('itemDescription').value.trim()) { $('itemDescription').value = description; filled.push('描述'); }
+            if (icon && !$('itemIcon').value.trim()) { $('itemIcon').value = icon; filled.push('图标'); }
+            if (filled.length) {
+                setUrlHint('success', `✨ 已自动填充：${filled.join('、')}（可自由修改）`);
+            } else {
+                setUrlHint('', '');
+            }
         } else {
-            setUrlHint('', '');
+            // 手动刷新 = 明确意图，按抓取结果覆盖；站点没图标就回到默认 🎯
+            let applied = [];
+            if (title) { $('itemTitle').value = title; applied.push('标题'); }
+            if (description) { $('itemDescription').value = description; applied.push('描述'); }
+            $('itemIcon').value = icon || '🎯';
+            applied.push('图标');
+            setUrlHint('success', `🔄 已按抓取结果覆盖：${applied.join('、')}`);
         }
     } catch {
-        setUrlHint('', ''); // 抓取失败不打扰用户，表单照常手填
+        if (applyMode === 'manual') {
+            setUrlHint('error', '网络错误，刷新失败');
+        } else {
+            setUrlHint('', ''); // 自动抓取失败不打扰用户，表单照常手填
+        }
     }
+}
+
+// 自动填充：只在「新增模式 + 标题/描述/图标全空」时触发；
+// 编辑时改链接绝不自动覆盖（要用 🔄 按钮手动刷新）
+const autofillFromUrl = debounce(() => {
+    if (state.editingId) { setUrlHint('', ''); return; }
+    const cur = currentFetchUrl();
+    if (!cur) { setUrlHint('', ''); return; }
+
+    if (!getPassword()) {
+        setUrlHint('action', '🔒 解锁管理后即可自动获取站点信息（点击解锁）');
+        return;
+    }
+
+    // 三字段都有内容就不浪费请求
+    if ($('itemTitle').value.trim() && $('itemDescription').value.trim() && $('itemIcon').value.trim()) {
+        return;
+    }
+
+    fetchAndApplySiteInfo('auto', cur.inputValue, cur.fetchUrl);
 }, 600);
+
+// 手动刷新按钮：明确意图才覆盖；没解锁先弹解锁框，解锁后自动续跑
+async function refreshFromSiteInfo() {
+    const cur = currentFetchUrl();
+    if (!cur) {
+        setUrlHint('error', '先填写链接再抓取站点信息');
+        return;
+    }
+    if (!getPassword()) {
+        afterUnlockAction = 'manual';
+        requestPassword('解锁管理');
+        return;
+    }
+    $('siteInfoBtn').disabled = true;
+    try {
+        await fetchAndApplySiteInfo('manual', cur.inputValue, cur.fetchUrl);
+    } finally {
+        $('siteInfoBtn').disabled = false;
+    }
+}
 
 function previewItem() {
     const title = $('itemTitle').value.trim();
@@ -906,15 +975,19 @@ function bindEvents() {
         searchInput.focus();
     });
 
-    // 链接输入防抖后自动抓取站点信息填充表单
+    // 链接输入防抖后自动抓取站点信息填充表单（仅新增模式且全空时）
     $('itemUrl').addEventListener('input', autofillFromUrl);
 
-    // 未解锁时的抓取提示可点击 → 打开解锁框
+    // 未解锁时的抓取提示可点击 → 打开解锁框（解锁后续跑自动填充）
     $('urlFetchHint').addEventListener('click', () => {
         if ($('urlFetchHint').classList.contains('action')) {
+            afterUnlockAction = 'auto';
             requestPassword('解锁管理');
         }
     });
+
+    // 手动抓取按钮：按抓取结果覆盖标题/描述/图标
+    $('siteInfoBtn').addEventListener('click', refreshFromSiteInfo);
 
     // 管理解锁对话框（同样不响应点外部，防止误触）
     $('unlockBtn').addEventListener('click', () => requestPassword('解锁管理'));

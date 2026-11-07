@@ -8,7 +8,7 @@
     <!-- 改了 styles.css / app.js 之后，把下面的 v= 版本号 +1：
          浏览器和边缘缓存按完整 URL（含查询串）缓存，版本一变就会拉新文件，
          部署后普通刷新即生效，不需要用户强刷 -->
-    <link rel="stylesheet" href="styles.css?v=20261107-2">
+    <link rel="stylesheet" href="styles.css?v=20261107-3">
 </head>
 <body>
     <!-- 顶栏 -->
@@ -99,7 +99,10 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="itemUrl">链接 <span class="req">*</span></label>
+                            <div class="label-row">
+                                <label for="itemUrl">链接 <span class="req">*</span></label>
+                                <button type="button" class="text-btn" id="siteInfoBtn" title="按当前链接重新抓取站点信息，覆盖标题/描述/图标">🔄 抓取站点信息</button>
+                            </div>
                             <input type="url" id="itemUrl" required maxlength="2048" placeholder="https://example.com">
                             <p class="url-hint" id="urlFetchHint"></p>
                         </div>
@@ -173,6 +176,6 @@
 
     <div class="toast" id="toast" role="status" hidden></div>
 
-    <script src="app.js?v=20261107-1"></script>
+    <script src="app.js?v=20261107-3"></script>
 </body>
 </html>

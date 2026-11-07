@@ -1124,6 +1124,19 @@ body.unlock-open .modal {
     max-width: 400px;
 }
 
+/* 表单里「标签 + 操作按钮」的行 */
+.label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.label-row label {
+    margin-bottom: 0;
+}
+
 .form-status {
     display: none;
     padding: 9px 12px;
