@@ -1011,11 +1011,13 @@ body.drawer-open .drawer {
     transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms ease;
 }
 
-body.modal-open .modal-backdrop {
+body.modal-open .modal-backdrop,
+body.unlock-open .modal-backdrop {
     opacity: 1;
 }
 
-body.modal-open .modal {
+body.modal-open .modal,
+body.unlock-open .modal {
     transform: translateY(0) scale(1);
     opacity: 1;
 }
