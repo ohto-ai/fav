@@ -26,11 +26,105 @@ function getPassword() {
 function savePassword(password) {
     localStorage.setItem(PASSWORD_KEY, password);
     sessionStorage.removeItem(PASSWORD_KEY); // 清掉旧版本残留
+    updateUnlockIcon();
 }
 
 function clearPassword() {
     localStorage.removeItem(PASSWORD_KEY);
     sessionStorage.removeItem(PASSWORD_KEY);
+    updateUnlockIcon();
+}
+
+// ---------- 管理解锁 ----------
+// 编辑 / 删除 / 自动抓取都需要密码。密码没存过（或已失效）时按需弹出解锁框，
+// 用 /api/auth 验证通过后写入 localStorage，之后所有管理操作免输。
+
+let unlockResolver = null;
+
+function updateUnlockIcon() {
+    const btn = $('unlockBtn');
+    if (btn) btn.textContent = getPassword() ? '🔓' : '🔒';
+}
+
+function setUnlockStatus(kind, message) {
+    const status = $('unlockStatus');
+    status.className = `form-status${kind ? ` ${kind}` : ''}${message ? ' show' : ''}`;
+    status.textContent = message || '';
+}
+
+function openUnlockDialog(purpose) {
+    $('unlockTitle').textContent = purpose || '解锁管理';
+    $('unlockPassword').value = '';
+    setUnlockStatus('');
+    const backdrop = $('unlockBackdrop');
+    backdrop.hidden = false;
+    requestAnimationFrame(() => document.body.classList.add('unlock-open'));
+    setTimeout(() => $('unlockPassword').focus(), 200);
+}
+
+function finishUnlock(value) {
+    const resolver = unlockResolver;
+    unlockResolver = null;
+    document.body.classList.remove('unlock-open');
+    setTimeout(() => { $('unlockBackdrop').hidden = true; }, 220);
+    if (resolver) resolver(value);
+}
+
+/** 打开解锁框要密码；返回 Promise<密码|null>（取消时为 null） */
+function requestPassword(purpose) {
+    return new Promise((resolve) => {
+        if (unlockResolver) {
+            // 已有等待中的解锁框（理论上不会发生，兜底）
+            unlockResolver(null);
+        }
+        unlockResolver = resolve;
+        openUnlockDialog(purpose);
+    });
+}
+
+/** 取已存密码；没有就先解锁。返回 Promise<密码|null> */
+function ensurePassword(purpose) {
+    const stored = getPassword();
+    if (stored) return Promise.resolve(stored);
+    return requestPassword(purpose);
+}
+
+async function submitUnlock() {
+    const password = $('unlockPassword').value;
+    if (!password) {
+        setUnlockStatus('error', '请输入管理密码');
+        return;
+    }
+    const btn = $('unlockConfirmBtn');
+    btn.disabled = true;
+    setUnlockStatus('info', '验证中…');
+    try {
+        const response = await fetch('/api/auth', { headers: { 'x-fav-key': password } });
+        const body = await response.json().catch(() => null);
+        if (response.status === 200 && body && body.success) {
+            savePassword(password);
+            updateUnlockIcon();
+            setUnlockStatus('success', '✅ 已解锁，本机浏览器将记住密码');
+            setTimeout(() => finishUnlock(password), 400);
+            // 如果解锁是在表单里触发的（比如点了抓取提示），顺手再跑一次填充
+            if (!document.getElementById('modalBackdrop').hidden) {
+                autofillFromUrl();
+            }
+        } else if (response.status === 403) {
+            btn.disabled = false;
+            setUnlockStatus('error', '管理密码错误，请检查后重试');
+        } else {
+            btn.disabled = false;
+            setUnlockStatus('error', (body && body.error) || `验证失败（${response.status}）`);
+        }
+    } catch {
+        btn.disabled = false;
+        setUnlockStatus('error', '网络错误，请稍后再试');
+    }
+}
+
+function cancelUnlock() {
+    finishUnlock(null);
 }
 
 // ---------- 基础工具 ----------
@@ -472,9 +566,8 @@ async function handleDeleteClick(deleteBtn) {
 
     const item = findItem(state.drawerId);
     if (!item) return;
-    const password = getPassword();
+    const password = await ensurePassword('删除收藏');
     if (!password) {
-        toast('请先在表单里输入过管理密码，再执行删除');
         resetDeleteArmed();
         return;
     }
@@ -490,16 +583,18 @@ async function handleDeleteClick(deleteBtn) {
 
         if (response.status === 200 && body && body.success) {
             state.items = state.items.filter((it) => it.id !== item.id);
-            state.drawerId = null;
             renderSidebar();
             applyFilters();
+            // 必须先关抽屉再清理状态；反过来 closeDrawer 会因"无打开抽屉"直接返回，
+            // 导致抽屉卡在屏幕上关不掉（E2E 抓到过这个 bug）
             closeDrawer();
             toast('🗑 已删除');
             return;
         }
         if (response.status === 403) {
             clearPassword();
-            toast('管理密码错误，请检查后重试');
+            toast('管理密码已失效，请重新解锁');
+            requestPassword('重新解锁');
         } else {
             toast((body && body.error) || `删除失败（${response.status}）`);
         }
@@ -568,12 +663,19 @@ function setUrlHint(kind, message) {
 }
 
 const autofillFromUrl = debounce(async () => {
-    const raw = $('itemUrl').value.trim();
-    if (!raw || !isSafeUrl(raw)) { setUrlHint('', ''); return; }
+    const inputValue = $('itemUrl').value.trim();
+    if (!inputValue) { setUrlHint('', ''); return; }
+    // 容忍不带协议的输入（example.com → https://example.com），抓取用补全值，
+    // 陈旧结果判断用原始输入值，两者不能混用
+    let fetchUrl = inputValue;
+    if (!/^https?:\/\//i.test(fetchUrl)) fetchUrl = 'https://' + fetchUrl;
+    if (!isSafeUrl(fetchUrl)) { setUrlHint('', ''); return; }
 
-    // 抓取接口与写接口一样要密码；没存过密码就不打扰用户
-    const password = getPassword();
-    if (!password) { setUrlHint('', ''); return; }
+    // 抓取接口与写接口一样要密码；没解锁时给出可点击的解锁入口，而不是静默跳过
+    if (!getPassword()) {
+        setUrlHint('action', '🔒 解锁管理后即可自动获取站点信息（点击解锁）');
+        return;
+    }
 
     // 只填空字段；没有可填的就不浪费请求
     if ($('itemTitle').value.trim() && $('itemDescription').value.trim() && $('itemIcon').value.trim()) {
@@ -582,8 +684,8 @@ const autofillFromUrl = debounce(async () => {
 
     setUrlHint('fetching', '🔍 正在获取站点信息…');
     try {
-        const response = await fetch(`/api/preview?url=${encodeURIComponent(raw)}`, {
-            headers: { 'x-fav-key': password }
+        const response = await fetch(`/api/preview?url=${encodeURIComponent(fetchUrl)}`, {
+            headers: { 'x-fav-key': getPassword() }
         });
         if (response.status === 403) {
             setUrlHint('error', '管理密码无效，无法自动获取');
@@ -591,7 +693,11 @@ const autofillFromUrl = debounce(async () => {
         }
         const body = await response.json().catch(() => null);
         if (!response.ok || !body || !body.success) { setUrlHint('', ''); return; }
-        if ($('itemUrl').value.trim() !== raw) return; // 输入框已经变了，丢弃过期结果
+        if ($('itemUrl').value.trim() !== inputValue) {
+            // 输入框已经变了，丢弃过期结果
+            setUrlHint('', '');
+            return;
+        }
 
         const { title, description, icon } = body.data;
         const filled = [];
@@ -789,6 +895,28 @@ function bindEvents() {
     // 链接输入防抖后自动抓取站点信息填充表单
     $('itemUrl').addEventListener('input', autofillFromUrl);
 
+    // 未解锁时的抓取提示可点击 → 打开解锁框
+    $('urlFetchHint').addEventListener('click', () => {
+        if ($('urlFetchHint').classList.contains('action')) {
+            requestPassword('解锁管理');
+        }
+    });
+
+    // 管理解锁对话框
+    $('unlockBtn').addEventListener('click', () => requestPassword('解锁管理'));
+    $('unlockConfirmBtn').addEventListener('click', submitUnlock);
+    $('unlockCancelBtn').addEventListener('click', cancelUnlock);
+    $('unlockCloseBtn').addEventListener('click', cancelUnlock);
+    $('unlockBackdrop').addEventListener('click', (e) => {
+        if (e.target === $('unlockBackdrop')) cancelUnlock();
+    });
+    $('unlockPassword').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            submitUnlock();
+        }
+    });
+
     // 视图切换
     document.querySelectorAll('.view-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -840,7 +968,7 @@ function bindEvents() {
 
     // 抽屉
     $('drawerBackdrop').addEventListener('click', closeDrawer);
-    $('drawer').addEventListener('click', (e) => {
+    $('drawer').addEventListener('click', async (e) => {
         if (e.target.closest('#drawerCloseBtn')) { closeDrawer(); return; }
 
         if (e.target.closest('#drawerCopyBtn')) {
@@ -853,8 +981,11 @@ function bindEvents() {
 
         if (e.target.closest('#drawerEditBtn')) {
             const item = findItem(state.drawerId);
+            if (!item) return;
+            const password = await ensurePassword('编辑收藏');
+            if (!password) return;
             closeDrawer();
-            if (item) openModal(item);
+            openModal(item);
             return;
         }
 
@@ -886,10 +1017,12 @@ function bindEvents() {
     // 重试
     $('retryBtn').addEventListener('click', loadFavorites);
 
-    // Escape 逐层关闭
+    // Escape 逐层关闭（解锁框在最上层，最先处理）
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
-        if (document.body.classList.contains('modal-open')) {
+        if (document.body.classList.contains('unlock-open')) {
+            cancelUnlock();
+        } else if (document.body.classList.contains('modal-open')) {
             closeModal();
         } else if (document.body.classList.contains('drawer-open')) {
             closeDrawer();
@@ -921,6 +1054,9 @@ function init() {
     const savedTheme = localStorage.getItem('theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
     $('themeToggle').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+
+    // 解锁状态图标
+    updateUnlockIcon();
 
     bindEvents();
     loadFavorites();

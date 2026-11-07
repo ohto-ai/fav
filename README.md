@@ -14,7 +14,7 @@
 - ✍️ **表单直提交** - 填完即入库，无需跳转 GitHub
 - ✂️ **编辑 / 删除** - 详情抽屉里直接改；删除有两步确认
 - 🤖 **链接自动填充** - 输入网址自动抓取标题/描述/图标（支持 gbk 等中文站编码）
-- 🔑 **密码保护写入** - 管理密码存 Cloudflare Secret，本机 localStorage 记住一次输入
+- 🔑 **密码保护写入** - 管理密码存 Cloudflare Secret；顶栏 🔒 随时解锁管理（编辑/删除/自动填充都需要），验证一次存本机 localStorage
 - 🚀 **零依赖前端** - 无框架、无构建步骤
 
 ## 🏗️ 架构
@@ -42,6 +42,7 @@ Cloudflare Pages
 | PUT | `/api/favorites/:id` | 密码 | 全量更新，body 同 POST，返回更新后的完整记录 |
 | DELETE | `/api/favorites/:id` | 密码 | 删除单条 |
 | GET | `/api/preview?url=` | 密码 | 抓取目标站点的标题/描述/图标，供表单自动填充。只读 `<head>` 附近字节、自动识别 gbk 等编码、拒绝内网地址、8 秒超时 |
+| GET | `/api/auth` | 密码 | 校验管理密码（前端「解锁管理」用），正确返回 200 |
 
 响应统一为 `{success, data}` 或 `{success: false, error}`。错误码：
 

@@ -22,6 +22,7 @@
                 <button class="search-clear" id="searchClear" aria-label="清空搜索" hidden>✕</button>
             </div>
             <div class="topbar-actions">
+                <button class="icon-btn" id="unlockBtn" aria-label="管理解锁" title="管理解锁（编辑/删除/自动填充需要）">🔒</button>
                 <button class="icon-btn" id="themeToggle" aria-label="切换主题">🌙</button>
                 <button class="btn btn-primary" id="addItemBtn">＋ 新增收藏</button>
             </div>
@@ -145,6 +146,31 @@
                     </div>
                     <div id="previewBody"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理解锁对话框 -->
+    <div class="modal-backdrop" id="unlockBackdrop" hidden>
+        <div class="modal unlock-modal" role="dialog" aria-modal="true" aria-labelledby="unlockTitle">
+            <header class="modal-head">
+                <h2 id="unlockTitle">解锁管理</h2>
+                <button class="icon-btn" id="unlockCloseBtn" aria-label="关闭">✕</button>
+            </header>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="unlockPassword">管理密码</label>
+                    <input type="password" id="unlockPassword" autocomplete="current-password" placeholder="与 Cloudflare Secret 中的 FAV_PASSWORD 相同">
+                    <p class="form-hint">验证通过后保存在本机浏览器（localStorage），之后编辑、删除、自动填充都不再询问。</p>
+                </div>
+                <div class="form-status" id="unlockStatus"></div>
+                <footer class="modal-foot">
+                    <div></div>
+                    <div class="modal-foot-right">
+                        <button type="button" class="btn btn-secondary" id="unlockCancelBtn">取消</button>
+                        <button type="button" class="btn btn-primary" id="unlockConfirmBtn">解锁</button>
+                    </div>
+                </footer>
             </div>
         </div>
     </div>

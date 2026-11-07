@@ -1106,8 +1106,20 @@ body.modal-open .modal {
     color: var(--danger);
 }
 
+.url-hint.action {
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
 .url-hint:empty {
     display: none;
+}
+
+/* 解锁对话框（小一号） */
+.unlock-modal {
+    max-width: 400px;
 }
 
 .form-status {
