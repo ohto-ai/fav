@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light dark">
     <title>收藏集</title>
-    <link rel="stylesheet" href="styles.css">
+    <!-- 改了 styles.css / app.js 之后，把下面的 v= 版本号 +1：
+         浏览器和边缘缓存按完整 URL（含查询串）缓存，版本一变就会拉新文件，
+         部署后普通刷新即生效，不需要用户强刷 -->
+    <link rel="stylesheet" href="styles.css?v=20261107-1">
 </head>
 <body>
     <!-- 顶栏 -->
@@ -170,6 +173,6 @@
 
     <div class="toast" id="toast" role="status" hidden></div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=20261107-1"></script>
 </body>
 </html>
