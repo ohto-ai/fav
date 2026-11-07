@@ -611,10 +611,6 @@ function openModal(item = null) {
     $('modalTitle').textContent = item ? '编辑收藏' : '新增收藏';
     $('submitBtn').textContent = item ? '保存修改' : '保存收藏';
     setUrlHint('', '');
-
-    // 密码输入过一次就不再问（localStorage 持久保存）
-    const saved = getPassword();
-    if (saved) $('itemPassword').value = saved;
     setFormStatus('');
     showFormPanel();
 
@@ -757,10 +753,9 @@ async function handleFormSubmit(e) {
     const description = $('itemDescription').value.trim();
     const tags = $('itemTags').value.trim();
     const content = $('itemContent').value.trim();
-    const password = $('itemPassword').value;
 
-    if (!title || !url || !password) {
-        setFormStatus('error', '请填写标题、链接和管理密码');
+    if (!title || !url) {
+        setFormStatus('error', '请填写标题和链接');
         return;
     }
 
@@ -768,46 +763,65 @@ async function handleFormSubmit(e) {
     submitBtn.disabled = true;
     setFormStatus('info', '保存中…');
 
-    try {
-        const { status, body } = await createFavorite({
-            title,
-            url,
-            icon: icon || undefined,
-            description: description || undefined,
-            tags: tags || undefined,
-            content: content || undefined
-        }, password, state.editingId);
+    // 密码不放表单里：没解锁会自动弹解锁框（验证通过存本机，之后免输）
+    let password = await ensurePassword(state.editingId ? '编辑收藏' : '新增收藏');
+    if (!password) {
+        submitBtn.disabled = false;
+        setFormStatus('');
+        return;
+    }
 
-        if ((status === 201 || status === 200) && body && body.success) {
-            // 密码正确，记住它（localStorage，下次免输）
-            savePassword(password);
-            if (state.editingId) {
-                // 编辑：原地替换，保持列表顺序不变
-                const index = state.items.findIndex((it) => it.id === state.editingId);
-                if (index !== -1) state.items[index] = body.data;
-                renderSidebar();
-                applyFilters();
-                closeModal();
-                toast('✅ 已保存修改');
-            } else {
-                // 新增：插到列表最前面，不整页刷新
-                state.items.unshift(body.data);
-                state.selectedTags.clear();
-                renderSidebar();
-                applyFilters();
-                closeModal();
-                toast('✅ 已添加收藏');
+    try {
+        let status, body;
+        for (let attempt = 0; ; attempt++) {
+            ({ status, body } = await createFavorite({
+                title,
+                url,
+                icon: icon || undefined,
+                description: description || undefined,
+                tags: tags || undefined,
+                content: content || undefined
+            }, password, state.editingId));
+
+            if ((status === 201 || status === 200) && body && body.success) {
+                savePassword(password);
+                if (state.editingId) {
+                    // 编辑：原地替换，保持列表顺序不变
+                    const index = state.items.findIndex((it) => it.id === state.editingId);
+                    if (index !== -1) state.items[index] = body.data;
+                    renderSidebar();
+                    applyFilters();
+                    closeModal();
+                    toast('✅ 已保存修改');
+                } else {
+                    // 新增：插到列表最前面，不整页刷新
+                    state.items.unshift(body.data);
+                    state.selectedTags.clear();
+                    renderSidebar();
+                    applyFilters();
+                    closeModal();
+                    toast('✅ 已添加收藏');
+                }
+                return;
             }
-            return;
+
+            if (status === 403 && attempt === 0) {
+                // 密码在后台被改过：解锁框里重输一次，自动重试提交
+                clearPassword();
+                setFormStatus('error', '管理密码已失效，请在弹窗中重新输入');
+                password = await requestPassword('重新解锁');
+                if (password) {
+                    setFormStatus('info', '保存中…');
+                    continue;
+                }
+                break;
+            }
+            break;
         }
 
         switch (status) {
             case 400:
                 setFormStatus('error', (body && body.error) || '提交内容未通过校验');
-                break;
-            case 403:
-                clearPassword();
-                setFormStatus('error', '管理密码错误，请检查后重试');
                 break;
             case 404:
                 setFormStatus('error', '这条收藏已被删除，刷新页面看看');
@@ -902,14 +916,11 @@ function bindEvents() {
         }
     });
 
-    // 管理解锁对话框
+    // 管理解锁对话框（同样不响应点外部，防止误触）
     $('unlockBtn').addEventListener('click', () => requestPassword('解锁管理'));
     $('unlockConfirmBtn').addEventListener('click', submitUnlock);
     $('unlockCancelBtn').addEventListener('click', cancelUnlock);
     $('unlockCloseBtn').addEventListener('click', cancelUnlock);
-    $('unlockBackdrop').addEventListener('click', (e) => {
-        if (e.target === $('unlockBackdrop')) cancelUnlock();
-    });
     $('unlockPassword').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -1003,13 +1014,15 @@ function bindEvents() {
     });
     $('sidebarBackdrop').addEventListener('click', closeSidebar);
 
-    // 新增收藏
-    $('addItemBtn').addEventListener('click', openModal);
+    // 新增收藏：没解锁先弹解锁框，解锁后自动打开表单
+    $('addItemBtn').addEventListener('click', async () => {
+        const password = await ensurePassword('新增收藏');
+        if (!password) return;
+        openModal();
+    });
+    // 关闭只走 ✕ / 取消 / Escape —— 点到面板外面不关闭，防止输入内容误丢
     $('modalCloseBtn').addEventListener('click', closeModal);
     $('cancelBtn').addEventListener('click', closeModal);
-    $('modalBackdrop').addEventListener('click', (e) => {
-        if (e.target === $('modalBackdrop')) closeModal();
-    });
     $('previewBtn').addEventListener('click', previewItem);
     $('previewBackBtn').addEventListener('click', showFormPanel);
     $('addItemForm').addEventListener('submit', handleFormSubmit);

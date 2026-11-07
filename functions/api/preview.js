@@ -1,11 +1,11 @@
 /**
- * /api/favorites/preview?url=… —— 抓取目标站点的元信息（标题 / 描述 / 图标）
+ * /api/preview?url=… —— 抓取目标站点的元信息（标题 / 描述 / 图标）
  *
  * 供表单在输入链接后自动填充。需要管理密码：这本质是一个服务端代理，
  * 开放给任何人就等于给了别人一个借我们出口抓站点的通道。
  *
  * 只读取 <head> 附近的少量字节（提前断流），只返回元信息，不转发页面内容；
- * 拒绝内网地址；8 秒超时。
+ * 拒绝内网地址；8 秒超时。图标候选会逐个真实请求验证后才返回。
  */
 
 import { fail, ok, requireWriteAuth } from '../_lib.js';
@@ -62,9 +62,14 @@ export async function onRequestGet(context) {
 
   const bytes = await readHead(response);
   const html = decodeBody(bytes, response.headers.get('content-type') || '');
-  const meta = extractMeta(html, response.url || target.href);
+  const { title, description, iconCandidates, ogImage } = extractMeta(html, response.url || target.href);
+  const icon = await resolveIcon(iconCandidates, response.url || target.href, ogImage);
 
-  return ok(meta);
+  return ok({
+    title: title.slice(0, 120),
+    description: description.slice(0, 300),
+    icon: icon.slice(0, 512),
+  });
 }
 
 /** 内网 / 环回地址不抓取 */
@@ -147,17 +152,19 @@ function decodeBody(bytes, contentType) {
   }
 }
 
-/** 从 HTML 提取标题 / 描述 / 图标 */
+/** 从 HTML 提取标题 / 描述 / 图标候选列表 */
 function extractMeta(html, pageUrl) {
   const metas = html.match(/<meta\s+[^>]*>/gi) || [];
   const links = html.match(/<link\s+[^>]*>/gi) || [];
 
   const metaContent = (key) => {
-    const keyPattern = new RegExp(`(?:property|name)=["']${key}["']`, 'i');
+    const wanted = key.toLowerCase();
     for (const tag of metas) {
-      if (!keyPattern.test(tag)) continue;
-      const m = tag.match(/content=["']([^"']*)["']/i);
-      if (m && m[1]) return clean(m[1]);
+      const keys = getAttrValues(tag, 'property').concat(getAttrValues(tag, 'name'))
+        .map((v) => v.toLowerCase());
+      if (!keys.includes(wanted)) continue;
+      const content = getAttrValues(tag, 'content')[0];
+      if (content) return clean(content);
     }
     return '';
   };
@@ -176,51 +183,131 @@ function extractMeta(html, pageUrl) {
     metaContent('twitter:description') ||
     metaContent('description');
 
-  const icon = pickIcon(links, pageUrl);
-
-  return {
-    title: title.slice(0, 120),
-    description: description.slice(0, 300),
-    icon: icon.slice(0, 512),
-  };
+  return { title, description, iconCandidates: collectIconCandidates(links, pageUrl), ogImage: metaContent('og:image') || metaContent('twitter:image') };
 }
 
-/** favicon 优先级：apple-touch-icon（大而清晰）> shortcut icon > icon > 默认 /favicon.ico */
-function pickIcon(links, pageUrl) {
+/**
+ * 读标签属性值，兼容三种写法：双引号 / 单引号 / 无引号（不少站点是
+ * <link rel=icon href=/logo.ico> 这种裸写法）。同名属性出现多次时
+ * 全部收集（steampy 这类站会把 rel=icon 和 rel=apple-touch-icon
+ * 写在同一个 <link> 里）。
+ */
+function getAttrValues(tag, name) {
+  const values = [];
+  const re = new RegExp(
+    `\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`,
+    'gi'
+  );
+  let m;
+  while ((m = re.exec(tag))) {
+    values.push(decodeEntities(m[1] ?? m[2] ?? m[3] ?? ''));
+  }
+  return values;
+}
+
+/**
+ * 收集 HTML 里声明的图标候选，按质量打分排序（不在这里做最终决定）。
+ * 打分依据：rel 类型 + sizes 声明的尺寸。apple-touch-icon 通常 180×180，
+ * 在卡片的小图标框里观感最好；普通 icon 多为 16×16，往后排。
+ */
+function collectIconCandidates(links, pageUrl) {
   const candidates = [];
   for (const tag of links) {
-    const relMatch = tag.match(/rel=["']([^"']*)["']/i);
-    const hrefMatch = tag.match(/href=["']([^"']*)["']/i);
-    if (!relMatch || !hrefMatch || !hrefMatch[1]) continue;
-    const rel = relMatch[1].toLowerCase();
-    if (!/icon/.test(rel) || /mask-icon/.test(rel)) continue;
-    candidates.push({
-      rel,
-      href: hrefMatch[1],
-      sizes: (tag.match(/sizes=["']([^"']*)["']/i) || ['', ''])[1],
-    });
-  }
-  const pick = (filter) => {
-    const found = candidates.find(filter);
-    if (!found) return '';
-    try {
-      return new URL(found.href, pageUrl).href;
-    } catch {
-      return '';
+    const rels = getAttrValues(tag, 'rel').map((v) => v.toLowerCase());
+    if (!rels.length) continue;
+    const hrefs = getAttrValues(tag, 'href');
+    if (!hrefs.length || !hrefs[0]) continue;
+
+    let score = -1; // -1 = 与图标无关的 link（stylesheet 等）
+    for (const rel of rels) {
+      if (/mask-icon/.test(rel)) continue;
+      if (/apple-touch-icon/.test(rel)) score = Math.max(score, 300);
+      else if (/(^|\s)icon(\s|$)/.test(rel)) score = Math.max(score, 100);
+      else if (/shortcut/.test(rel)) score = Math.max(score, 50);
     }
-  };
-  return (
-    pick((c) => /apple-touch-icon/.test(c.rel)) ||
-    pick((c) => /shortcut\s+icon/.test(c.rel)) ||
-    pick((c) => /(^|\s)icon(\s|$)/.test(c.rel)) ||
-    (() => {
-      try {
-        return new URL('/favicon.ico', pageUrl).href;
-      } catch {
-        return '';
+    if (score < 0) continue;
+
+    let href;
+    try {
+      href = new URL(hrefs[0], pageUrl).href;
+    } catch {
+      continue;
+    }
+    candidates.push({ href, score: score + parseIconSize(tag) });
+  }
+  return candidates.sort((a, b) => b.score - a.score).map((c) => c.href);
+}
+
+function parseIconSize(tag) {
+  const m = tag.match(/sizes=["']([^"']*)["']/i);
+  if (!m) return 0;
+  if (/any/i.test(m[1])) return 400; // SVG 等任意尺寸，矢量放大不糊
+  const size = m[1].match(/(\d+)x(\d+)/i);
+  return size ? parseInt(size[1], 10) : 0;
+}
+
+/**
+ * 图标最终裁决：逐个真实请求验证候选（200 且内容确实是图片才算数），
+ * 全部失效再验证站点根部的 /favicon.ico，最后才考虑 og:image（分享图，
+ * 裁切后当图标用是下策，但比空着强）。绝不返回没验证过的 URL——
+ * 声明了但 404 的图标在卡片上就是一张裂图。
+ */
+async function resolveIcon(candidates, pageUrl, ogImage) {
+  const tried = [];
+  for (const href of candidates.slice(0, 3)) {
+    if (await urlLooksLikeImage(href)) return href;
+    tried.push(href);
+  }
+  try {
+    const fallback = new URL('/favicon.ico', pageUrl).href;
+    if (!tried.includes(fallback) && (await urlLooksLikeImage(fallback))) {
+      return fallback;
+    }
+    if (ogImage) {
+      const og = new URL(ogImage, pageUrl).href;
+      if (!tried.includes(og) && og !== fallback && (await urlLooksLikeImage(og))) {
+        return og;
       }
-    })()
-  );
+    }
+  } catch {
+    // pageUrl 异常时直接放弃图标
+  }
+  return '';
+}
+
+/** GET 目标图标，读到第一个数据块就断流；按 content-type / 魔数判断是否图片 */
+async function urlLooksLikeImage(url) {
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: REQUEST_HEADERS,
+      redirect: 'follow',
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) return false;
+    const type = (response.headers.get('content-type') || '').toLowerCase();
+    if (type.startsWith('image/')) return true;
+    if (!response.body) return false;
+    // 个别站点用 application/octet-stream 提供图标：看魔数
+    const reader = response.body.getReader();
+    const { value } = await reader.read();
+    try {
+      await reader.cancel();
+    } catch {
+      // 流可能已自行结束
+    }
+    if (!value || value.length < 4) return false;
+    const b = value;
+    return (
+      (b[0] === 0x00 && b[1] === 0x00 && b[2] === 0x01 && b[3] === 0x00) || // ICO
+      (b[0] === 0x89 && b[1] === 0x50) || // PNG
+      (b[0] === 0x47 && b[1] === 0x49) || // GIF
+      (b[0] === 0xff && b[1] === 0xd8) || // JPEG
+      (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46) // RIFF/WEBP
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** 最小 HTML 实体解码（&amp; &#39; &#x27; &nbsp; 等常见形式） */
